@@ -26,8 +26,17 @@ align(1) struct RGBA {
 		struct { ubyte r; ubyte g; ubyte b; ubyte a; }
 		ubyte[4] vv;
 		uint v;
-	}	
-
+	}
+	
+	static RGBA opCall(ubyte r, ubyte g, ubyte b, ubyte a = 0xFF) {
+		RGBA c;
+		c.r = r;
+		c.g = g;
+		c.b = b;
+		c.a = a;
+		return c;
+	}
+	
 	static RGBA toBGRA(RGBA c) {
 		ubyte r = c.r;
 		c.r = c.b;
@@ -38,6 +47,9 @@ align(1) struct RGBA {
 
 // Abstract Image
 abstract class Image {
+	char[] id;
+	Image[] childs;
+
 	// Info
 	ubyte bpp();
 	int width();
@@ -186,7 +198,7 @@ abstract class Image {
 	void setChroma(RGBA c) {
 		if (hasPalette) {
 			foreach (idx, cc; colors) {
-				if (cc == c) color(idx, RGBA(0));
+				if (cc == c) color(idx, RGBA(0, 0, 0, 0));
 			}
 		} else {
 			for (int y = 0; y < height; y++) {
@@ -196,6 +208,9 @@ abstract class Image {
 			}
 		}
 	}
+}
+
+class ImageContainer {
 }
 
 // TrueColor Bitmap
@@ -238,6 +253,11 @@ class Bitmap8 : Image {
 	override int ncolor(int s) { palette.length = s; return s; }
 	RGBA color(int idx) { return palette[idx]; }
 	RGBA color(int idx, RGBA col) { return palette[idx] = col; }
+	void colorSwap(int i1, int i2) {
+		RGBA ct = palette[i1];
+		palette[i1] = palette[i2];
+		palette[i2] = ct;
+	}
 
 	this(int w, int h) {
 		_width = w;
