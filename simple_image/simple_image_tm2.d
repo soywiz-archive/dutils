@@ -90,6 +90,7 @@ class ImageFileFormat_TM2 : ImageFileFormat {
 							// Leemos la paleta
 							palette.length = teh.ClutSize; s.read(palette);
 
+							//writefln("%d", teh.ClutColors);
 							i.ncolor = teh.ClutColors;
 
 							for (int y = 0, n = 0; y < teh.ImageHeight; y++) {

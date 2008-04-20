@@ -246,7 +246,7 @@ class Bitmap8 : Image {
 	uint get(int x, int y) { return data[y * _width + x]; }
 
 	override RGBA get32(int x, int y) {
-		return palette[get(x, y)];		
+		return palette[get(x, y) % palette.length];		
 	}
 	
 	override int ncolor() { return palette.length;}
@@ -254,6 +254,7 @@ class Bitmap8 : Image {
 	RGBA color(int idx) { return palette[idx]; }
 	RGBA color(int idx, RGBA col) { return palette[idx] = col; }
 	void colorSwap(int i1, int i2) {
+		if (i1 >= palette.length || i2 >= palette.length) return;
 		RGBA ct = palette[i1];
 		palette[i1] = palette[i2];
 		palette[i2] = ct;
