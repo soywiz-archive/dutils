@@ -1,8 +1,10 @@
 import simple_image.simple_image;
 
 import std.stream;
+import std.string;
 import std.stdio;
 import std.date;
+import std.file;
 
 void setString(char[] v, char[] s, char pad = '\0') {
 	int mlen = s.length;
@@ -49,19 +51,13 @@ void showHelp() {
 	writefln("tm2png file.tm2");
 }
 
-int main(char[][] args) {
-	Image i;
+void convert(char[] name) {
+	char[] i_f = name;
+	char[] o_f = name ~ ".tar";
 	
-	if (args.length < 2) {
-		showHelp();
-		return 0;
-	}
+	writefln("%s->%s", i_f, o_f);
 	
-	char[] i_f = args[1];
-	char[] o_f = args[1] ~ ".tar";
-	
-	i = ImageFileFormatProvider.read(new File(i_f, FileMode.In));
-	
+	Image i = ImageFileFormatProvider.read(new File(i_f, FileMode.In));
 	Stream o = new File(o_f, FileMode.OutNew);
 	
 	void doAlign() {
@@ -80,6 +76,25 @@ int main(char[][] args) {
 		o.write(TA(te));
 		doAlign();
 		fs.position = 0; o.copyFrom(fs);
+	}
+}
+
+int main(char[][] args) {
+	if (args.length < 2) {
+		showHelp();
+		return 0;
+	}
+	
+	if (isdir(args[1])) {
+		listdir(args[1], delegate bool(char[] n) {
+			if (n.length < 4) return true;
+			if (toupper(n[n.length - 4..n.length]) == ".TM2") {
+				convert(args[1] ~ "/" ~ n);
+			}
+			return true;
+		});
+	} else {
+		convert(args[1]);
 	}
 
 	return 0;
