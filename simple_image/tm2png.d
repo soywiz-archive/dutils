@@ -6,7 +6,7 @@ import std.stdio;
 import std.date;
 import std.file;
 
-void setString(char[] v, char[] s, char pad = '\0') {
+void setString(char[] v, char[] s = "", char pad = '\0') {
 	int mlen = s.length;
 	if (v.length < mlen) mlen = v.length;
 	v[0..mlen] = s;
@@ -63,20 +63,30 @@ void convert(char[] name) {
 	void doAlign() {
 		while (o.position % 0x200) o.write(cast(ubyte)0);
 	}
+	
+	TAR_Entry te;
 
+	void writeTE() {
+		doAlign();
+		o.write(TA(te));
+	}
+	
 	foreach (k, ic; i.childs) {
 		Stream fs = new MemoryStream();
 	
 		Image ic32 = new Bitmap32(ic.width, ic.height); ic32.copyFrom(ic);
 		ImageFileFormatProvider["png"].write(ic32, fs);
 
-		TAR_Entry te = TAR_Entry(std.string.format("%03d.png", k), fs.size, getUTCtime() / TicksPerSecond);
+		te = TAR_Entry(std.string.format("%03d.png", k), fs.size, getUTCtime() / TicksPerSecond);
 
-		doAlign();
-		o.write(TA(te));
+		writeTE();
 		doAlign();
 		fs.position = 0; o.copyFrom(fs);
 	}
+	
+	setString(cast(char[])TA(te));
+	//writeTE();
+	doAlign();
 }
 
 int main(char[][] args) {
@@ -89,7 +99,11 @@ int main(char[][] args) {
 		listdir(args[1], delegate bool(char[] n) {
 			if (n.length < 4) return true;
 			if (toupper(n[n.length - 4..n.length]) == ".TM2") {
-				convert(args[1] ~ "/" ~ n);
+				try {
+					convert(args[1] ~ "/" ~ n);
+				} catch (Exception e) {
+					writefln("ERROR: %s", e.toString());
+				}
 			}
 			return true;
 		});

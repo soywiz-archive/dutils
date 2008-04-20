@@ -55,6 +55,9 @@ class ImageFileFormat_TM2 : ImageFileFormat {
 	override char[] identifier() { return "tm2"; }
 
 	char[] header = "TIM2";
+	
+	override bool update(Image i, Stream s) {
+	}
 
 	override Image read(Stream s) {
 		Image ic = new Bitmap8(1, 1);

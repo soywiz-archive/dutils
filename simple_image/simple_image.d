@@ -47,13 +47,13 @@ class ImageFileFormatProvider {
 // Abstract ImageFileFormat
 abstract class ImageFileFormat {
 	private this() { }
+	
+	bool update(Image i, Stream s) { throw(new Exception("Updating not implemented")); return false; } }
+	bool update(Image i, char[] name) { Stream s = new File(name, FileMode.OutNew); bool r = update(i, s); s.close(); return r; }
+	
 	bool write(Image i, Stream s) { throw(new Exception("Writing not implemented")); return false; }
-	bool write(Image i, char[] name) {
-		Stream s = new File(name, FileMode.OutNew);
-		bool r = write(i, s);
-		s.close();
-		return r;
-	}
+	bool write(Image i, char[] name) { Stream s = new File(name, FileMode.OutNew); bool r = write(i, s); s.close(); return r; }
+	
 	Image read(Stream s) { throw(new Exception("Reading not implemented")); return null; }
 	Image[] readMultiple(Stream s) { throw(new Exception("Multiple reading not implemented")); return null; }
 	bool check(Stream s) { return false; }
