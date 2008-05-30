@@ -1,6 +1,6 @@
-module simple_image.simple_image_png;
+module simple_image_png;
 
-import simple_image.simple_image;
+import simple_image;
 import std.zlib;
 import crc32;
 

@@ -1,12 +1,13 @@
-import simple_image.simple_image;
+import simple_image;
 
 import std.stream;
 import std.string;
 import std.stdio;
 import std.date;
 import std.file;
+import std.zip;
 
-void setString(char[] v, char[] s = "", char pad = '\0') {
+/*void setString(char[] v, char[] s = "", char pad = '\0') {
 	int mlen = s.length;
 	if (v.length < mlen) mlen = v.length;
 	v[0..mlen] = s;
@@ -45,22 +46,22 @@ align(1) struct TAR_Entry {
 
 		return e;
 	}
-}
+}*/
 
 void showHelp() {
-	writefln("tm2png file.tm2");
+	writefln("tm2png <file.tm2>");
 }
 
 void convert(char[] name) {
 	char[] i_f = name;
-	char[] o_f = name ~ ".tar";
+	char[] o_f = name ~ ".zip";
 	
 	writefln("%s->%s", i_f, o_f);
 	
-	Image i = ImageFileFormatProvider.read(new File(i_f, FileMode.In));
-	Stream o = new File(o_f, FileMode.OutNew);
+	Image i = ImageFileFormatProvider.read(new BufferedStream(new File(i_f, FileMode.In)));
+	Stream o = new BufferedStream(new File(o_f, FileMode.OutNew));
 	
-	void doAlign() {
+	/*void doAlign() {
 		while (o.position % 0x200) o.write(cast(ubyte)0);
 	}
 	
@@ -69,24 +70,39 @@ void convert(char[] name) {
 	void writeTE() {
 		doAlign();
 		o.write(TA(te));
-	}
+	}*/
+
+	std.zip.ZipArchive za = new ZipArchive();
+	std.zip.ArchiveMember zam;
 	
 	foreach (k, ic; i.childs) {
 		Stream fs = new MemoryStream();
 	
 		Image ic32 = new Bitmap32(ic.width, ic.height); ic32.copyFrom(ic);
 		ImageFileFormatProvider["png"].write(ic32, fs);
+		
+		ubyte[] data;
+		data.length = fs.position;
+		fs.position = 0;
+		fs.read(data);
+		
+		//te = TAR_Entry(std.string.format("%03d.png", k), fs.size, getUTCtime() / TicksPerSecond);
+		
+		zam = new ArchiveMember();
+		zam.name = std.string.format("%03d.png", k);
+		zam.expandedData = data;
+		za.addMember(zam);
 
-		te = TAR_Entry(std.string.format("%03d.png", k), fs.size, getUTCtime() / TicksPerSecond);
-
-		writeTE();
-		doAlign();
+		//writeTE();
+		//doAlign();
 		fs.position = 0; o.copyFrom(fs);
 	}
 	
-	setString(cast(char[])TA(te));
+	o.write(cast(ubyte[])za.build());
+	
+	//setString(cast(char[])TA(te));
 	//writeTE();
-	doAlign();
+	//doAlign();
 }
 
 int main(char[][] args) {

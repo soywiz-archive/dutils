@@ -1,4 +1,4 @@
-import simple_image.simple_image;
+import simple_image;
 
 import std.stream;
 
@@ -12,6 +12,7 @@ version = demo_tga;
 int main(char[][] args) {
 	Image i;
 
+	/*
 	version (demo_32) {
 		i = ImageFileFormatProvider.read(new File("samples/sample32.png"));
 		version(demo_png) ImageFileFormatProvider["png"].write(i, new File("output/test32.png", FileMode.OutNew));
@@ -28,7 +29,10 @@ int main(char[][] args) {
 		i = ImageFileFormatProvider.read(new File("samples/sample8.png"));
 		version(demo_png) ImageFileFormatProvider["png"].write(i, new File("output/test8.png", FileMode.OutNew));
 		version(demo_tga) ImageFileFormatProvider["tga"].write(i, new File("output/test8.tga", FileMode.OutNew));
-	}
+	}*/
+
+	i = ImageFileFormatProvider.read(new File("B01_1A.BMP"));
+	ImageFileFormatProvider["png"].write(i, new File("B01_1A.PNG", FileMode.OutNew));
 
 	//ImageFileFormatProvider.read(new File("samples/sample32.png")).createPalette(16);
 

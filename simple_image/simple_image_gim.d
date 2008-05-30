@@ -1,6 +1,6 @@
-module simple_image.simple_image_gim;
+module simple_image_gim;
 
-import simple_image.simple_image;
+import simple_image;
 
 import std.stream;
 import std.stdio;

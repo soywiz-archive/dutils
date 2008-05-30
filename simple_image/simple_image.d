@@ -2,7 +2,7 @@
 	soywiz@gmail.com
 */
 
-module simple_image.simple_image;
+module simple_image;
 
 public import std.stream, std.stdio, std.intrinsic, std.string;
 import std.path;
@@ -48,7 +48,7 @@ class ImageFileFormatProvider {
 abstract class ImageFileFormat {
 	private this() { }
 	
-	bool update(Image i, Stream s) { throw(new Exception("Updating not implemented")); return false; } }
+	bool update(Image i, Stream s) { throw(new Exception("Updating not implemented")); return false; }
 	bool update(Image i, char[] name) { Stream s = new File(name, FileMode.OutNew); bool r = update(i, s); s.close(); return r; }
 	
 	bool write(Image i, Stream s) { throw(new Exception("Writing not implemented")); return false; }
