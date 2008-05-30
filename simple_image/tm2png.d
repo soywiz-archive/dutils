@@ -39,13 +39,11 @@ void convert(char[] name) {
 		zam.expandedData = data;
 		za.addMember(zam);
 
-		fs.position = 0; o.copyFrom(fs);
+		fs.position = 0;
 	}
 	
-	i.close();
-
 	Stream o = new BufferedStream(new File(o_f, FileMode.OutNew));
-	o.write(cast(ubyte[])za.build());
+	o.write(cast(ubyte[])za.build);
 	o.close();
 }
 
