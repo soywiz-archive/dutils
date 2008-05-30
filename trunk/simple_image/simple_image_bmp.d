@@ -1,6 +1,6 @@
-module simple_image.simple_image_bmp;
+module simple_image_bmp;
 
-import simple_image.simple_image;
+import simple_image;
 
 class ImageFileFormat_BMP : ImageFileFormat {
 	align(1) struct BITMAPFILEHEADER {

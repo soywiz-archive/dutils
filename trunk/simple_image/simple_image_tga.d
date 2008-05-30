@@ -1,6 +1,6 @@
-module simple_image.simple_image_tga;
+module simple_image_tga;
 
-import simple_image.simple_image;
+import simple_image;
 
 // http://local.wasp.uwa.edu.au/~pbourke/dataformats/tga/
 class ImageFileFormat_TGA : ImageFileFormat {

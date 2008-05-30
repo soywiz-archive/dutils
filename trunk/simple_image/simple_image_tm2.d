@@ -1,6 +1,6 @@
-module simple_image.simple_image_tm2;
+module simple_image_tm2;
 
-import simple_image.simple_image;
+import simple_image;
 
 import std.stream;
 import std.stdio;
@@ -57,6 +57,7 @@ class ImageFileFormat_TM2 : ImageFileFormat {
 	char[] header = "TIM2";
 	
 	override bool update(Image i, Stream s) {
+		return false;
 	}
 
 	override Image read(Stream s) {
