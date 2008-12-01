@@ -1,6 +1,6 @@
-module simple_image_tm2;
+module si_tm2;
 
-import simple_image;
+import si;
 
 import std.stream;
 import std.stdio;
@@ -165,7 +165,7 @@ class ImageFileFormat_TM2 : ImageFileFormat {
 		return ic;
 	}
 
-	override bool check(Stream s) { return s.readString(header.length) == header; }
+	override int check(Stream s) { return (s.readString(header.length) == header) ? 10 : 0; }
 }
 
 static this() {

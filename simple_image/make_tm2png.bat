@@ -1,1 +1,0 @@
-@dmd simple_image.d simple_image_tm2.d simple_image_png.d tm2png.d -oftm2png.exe
