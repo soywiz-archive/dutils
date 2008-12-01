@@ -19,16 +19,28 @@ class ImageFileFormatProvider {
 		list[iff.identifier] = iff;
 	}
 
-	static ImageFileFormat find(Stream s) {
-		foreach (iff; list.values) if (iff.check(new SliceStream(s, s.position))) return iff;
-		throw(new Exception("Unrecognized ImageFileFormat"));
-		return null;
+	static ImageFileFormat find(Stream s, int check_size = 1024) {
+		auto cs = new MemoryStream();
+		cs.copyFrom(new SliceStream(s, s.position, s.position + check_size));
+	
+		ImageFileFormat cff;
+		int certain = 0;
+		foreach (iff; list.values) {
+			int c_certain = iff.check(new SliceStream(cs, 0));
+			if (c_certain > certain) {
+				cff = iff;
+				certain = c_certain;
+				if (certain >= 10) break;
+			}
+		}
+		if (certain == 0) throw(new Exception("Unrecognized ImageFileFormat"));
+		return cff;
 	}
 
 	static Image read(Stream s) { return find(s).read(s); }
 	
 	static Image read(char[] name) {
-		Stream s = new File(name);
+		Stream s = new BufferedFile(name);
 		Image i = read(s);
 		s.close();
 		return i;
@@ -52,7 +64,7 @@ abstract class ImageFileFormat {
 	
 	Image read(Stream s) { throw(new Exception("Reading not implemented")); return null; }
 	Image[] readMultiple(Stream s) { throw(new Exception("Multiple reading not implemented")); return null; }
-	bool check(Stream s) { return false; }
+	int check(Stream s) { return 0; }
 	char[] identifier() { return "null"; }
 }
 

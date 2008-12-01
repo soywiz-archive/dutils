@@ -89,10 +89,10 @@ class ImageFileFormat_BMP : ImageFileFormat {
 		return i;
 	}
 	
-	bool check(Stream s) {
+	override int check(Stream s) {
 		BITMAPFILEHEADER h;
 		s.read(TA(h));
-		return (h.bfType == "BM");
+		return (h.bfType == "BM") ? 10 : 0;
 	}
 }
 
