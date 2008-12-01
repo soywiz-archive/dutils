@@ -192,12 +192,14 @@ class ImageFileFormat_PNG : ImageFileFormat {
 						pdata = idata.ptr + (1 + Bpp * h.width) * y;
 						ubyte filter = *pdata; pdata++;
 						
+						//writefln("%d: %d", y, filter);
+						
 						switch (filter) {
 							default: throw(new Exception(std.string.format("Row filter 0x%02d unsupported", filter)));
-							case 0: for (x = Bpp; x < row.length; x++, pdata++) row[x] = *pdata; break; // Unfiltered
+							case 0: for (x = Bpp; x < row.length; x++, pdata++) row[x] = *pdata + 0; break; // Unfiltered
 							case 1: for (x = Bpp; x < row.length; x++, pdata++) row[x] = *pdata + row[x - Bpp]; break; // Sub
 							case 2: for (x = Bpp; x < row.length; x++, pdata++) row[x] = *pdata + prow[x]; break; // Up
-							case 3: for (x = Bpp; x < row.length; x++, pdata++) row[x] = *pdata + (row[x - Bpp], prow[x]) >> 1; break; // Average
+							case 3: for (x = Bpp; x < row.length; x++, pdata++) row[x] = *pdata + (row[x - Bpp] + prow[x]) / 2; break; // Average
 							case 4: for (x = Bpp; x < row.length; x++, pdata++) row[x] = *pdata + PaethPredictor(row[x - Bpp], prow[x], prow[x - Bpp]); break; // Paeth
 						}
 

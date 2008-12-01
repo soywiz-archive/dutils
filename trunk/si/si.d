@@ -208,6 +208,9 @@ abstract class Image {
 			}
 		}
 	}
+	
+	void write(char[] format, char[] file) { ImageFileFormatProvider[format].write(this, file); }
+	void write(char[] format, Stream file) { ImageFileFormatProvider[format].write(this, file); }
 }
 
 // TrueColor Bitmap
