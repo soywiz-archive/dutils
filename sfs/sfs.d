@@ -4,11 +4,13 @@ import std.string, std.stream, std.file, std.path, std.stdio;
 
 class FS_Entry {
 	char[] name;
+	private FS_Entry _parent;
 
 	FS_Entry[char[]] mounts;
 
 	final public FS_Entry mount(char[] name, FS_Entry mount) {
 		mounts[name] = mount;
+		mount.parent = this;
 		return this;
 	}
 
@@ -18,6 +20,11 @@ class FS_Entry {
 		throw(new Exception(format("Can't open or create '%s'", name)));
 	}
 
+	FS_Entry parent(FS_Entry fe) {
+		_parent = fe;
+		if (_parent is null) _parent = this;
+		return _parent;
+	}
 	FS_Entry parent() { return this; }
 	FS_Entry[] childs() { return []; }
 	
@@ -94,10 +101,11 @@ class FS_Entry {
 class Directory : FS_Entry {
 	char[] path;
 	
-	this(char[] path, char[] name = null) {
+	this(char[] path, char[] name = null, FS_Entry parent = null) {
 		if (name is null) name = getBaseName(path);
 		this.path = path;
 		this.name = name;
+		this.parent = parent;
 	}
 
 	Stream _open;
@@ -135,7 +143,7 @@ class Directory : FS_Entry {
 	FS_Entry[] childs() {
 		if (!cached) {
 			foreach (cname; listdir(path)) {
-				_childs ~= new Directory(child_path(cname), cname);
+				_childs ~= new Directory(child_path(cname), cname, this);
 			}
 			cached = true;
 		}
