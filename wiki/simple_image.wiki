@@ -1,3 +1,17 @@
-simple_image is a very lightweight library for load, manipulate and save images with palette or true color.
+#labels bmp,tga,png,gim,tm2,tim2
+simple_image is a very lightweight library for load, manipulate and save color-mapped and true color images without any dependences.
 
-Currently can read *BMP* and *PNG* files. And can write *PNG* and *TGA* files.
+Reading:
+- BMP
+- TGA
+- PNG
+- GIM
+- TM2
+
+Writing:
+- TGA
+- PNG
+
+Updating:
+- GIM
+- TM2
