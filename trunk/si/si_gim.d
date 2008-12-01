@@ -275,10 +275,10 @@ class ImageFileFormat_GIM : ImageFileFormat {
 		return true;
 	}
 
-	override bool check(Stream s) {
+	override int check(Stream s) {
 		ubyte[] cheader; cheader.length = header.length;
 		s.read(cast(ubyte[])cheader);
-		return (cheader == header);
+		return (cheader == header) ? 10 : 0;
 	}
 }
 
