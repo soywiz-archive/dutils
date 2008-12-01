@@ -5,33 +5,35 @@ import std.string;
 
 // http://local.wasp.uwa.edu.au/~pbourke/dataformats/tga/
 class ImageFileFormat_TGA : ImageFileFormat {
-	align(1) struct TGA_Header {
-		ubyte idlength;
-		ubyte colourmaptype;
-		ubyte datatypecode;
-		short colourmaporigin;
-		short colourmaplength;
-		ubyte colourmapdepth;
-		short x_origin;
-		short y_origin;
-		short width;
-		short height;
-		ubyte bitsperpixel;
-		ubyte imagedescriptor;
-	   
-		int  atr_bits()     { return ((imagedescriptor >> 0) & 0b111) != 0; }
-		bool flip_y()       { return !((imagedescriptor >> 5) & 0b1  ) != 0; }
-		int  interleaving() { return ((imagedescriptor >> 6) & 0b11 ) != 0; }
-	}
-
 	override char[] identifier() { return "tga"; }
 
-	RGBA RGBA_BGRA(RGBA ic) {
-		RGBA oc;
-		oc.vv[0] = ic.vv[2]; oc.vv[1] = ic.vv[1];
-		oc.vv[2] = ic.vv[0]; oc.vv[3] = ic.vv[3];
-		return oc;
+	align(1) struct TGA_Header {
+		ubyte idlength;           // 0
+		ubyte colourmaptype;      // 1
+		ubyte datatypecode;       // 2
+		short colourmaporigin;    // 3-4
+		short colourmaplength;    // 5-6
+		ubyte colourmapdepth;     // 7
+		short x_origin;           // 8-9
+		short y_origin;           // 10-11
+		short width;              // 12-13
+		short height;             // 14-15
+		ubyte bitsperpixel;       // 16
+		ubyte imagedescriptor;    // 17
+	   
+		private alias imagedescriptor id;
+
+		int  atr_bits()          { return Bit.EXT(id, 0, 3); }
+		int  atr_bits(int v)     { id = Bit.INS(id, 0, 3, v); return atr_bits; }
+
+		bool flip_y()            { return Bit.EXT(id, 5, 1) == 0; }
+		bool flip_y(bool v)      { id = Bit.INS(id, 5, 1, !v); return flip_y; }
+
+		int  interleaving()      { return Bit.EXT(id, 6, 2); }
+		int  interleaving(int v) { id = Bit.INS(id, 6, 2, v); return interleaving; }
 	}
+	
+	static assert (TGA_Header.sizeof == 18);
 
 	override bool write(Image i, Stream s) {
 		TGA_Header h;
@@ -41,15 +43,19 @@ class ImageFileFormat_TGA : ImageFileFormat {
 		h.y_origin = 0;
 		h.width = i.width;
 		h.height = i.height;
-		h.colourmaporigin = 0;
-		h.imagedescriptor = 0b_00_1_0_1000;
-
+		//h.imagedescriptor = 0b_00_1_0_1000;
+		h.flip_y = false;
+		
 		if (i.hasPalette) {
 			h.colourmaptype = 1;
 			h.datatypecode = 1;
+			h.colourmaporigin = 0;
 			h.colourmaplength = i.ncolor;
-			h.colourmapdepth = 32;
+			h.colourmapdepth = 24;
 			h.bitsperpixel = 8;
+			
+			h.imagedescriptor |= 8;
+			//h.imagedescriptor = 8;
 		} else {
 			h.colourmaptype = 0;
 			h.datatypecode = 2;
@@ -58,11 +64,13 @@ class ImageFileFormat_TGA : ImageFileFormat {
 			h.bitsperpixel = 32;
 		}
 
-		s.writeExact(&h, h.sizeof);
-
+		s.write(TA(h));
+		
 		// CLUT
 		if (i.hasPalette) {
-			for (int n = 0; n < i.ncolor; n++) s.write(RGBA_BGRA(i.color(n)).v);
+			for (int n = 0; n < h.colourmaplength; n++) {
+				s.write(TA(RGBA.toBGRA(i.color(n)))[0..(h.colourmapdepth / 8)]);
+			}
 		}
 
 		ubyte[] data;
@@ -78,24 +86,29 @@ class ImageFileFormat_TGA : ImageFileFormat {
 		} else {
 			for (int y = 0; y < h.height; y++) for (int x = 0; x < h.width; x++) {
 				RGBA c; c.v = i.get(x, y);
-				*cast(uint *)ptr = RGBA_BGRA(c).v;
+				*cast(uint *)ptr = RGBA.toBGRA(c).v;
 				ptr += 4;
 			}
 		}
 
 		s.write(data);
+		
+		s.write(cast(ubyte[])x"000000000000000054525545564953494F4E2D5846494C452E00");
 
 		return false;
 	}
 	
 	override Image read(Stream s) {
-		TGA_Header h; s.read(cast(ubyte[])(&h)[0..1]);
+		TGA_Header h; s.read(TA(h));
 
 		// Skips Id Length field
 		s.seek(h.idlength, SeekPos.Current);
 		
 		assert (h.width <= 4096);
 		assert (h.height <= 4096);
+		
+		assert (h.x_origin == 0);
+		assert (h.y_origin == 0);
 
 		RGBA readcol(int depth) {
 			RGBA c;
@@ -103,12 +116,12 @@ class ImageFileFormat_TGA : ImageFileFormat {
 				case 16:
 				break;
 				case 24:
-					s.read((cast(ubyte[])(&c)[0..1])[0..3]);
+					s.read(TA(c)[0..3]);
 					c = RGBA.toBGRA(c);
 					c.a = 0xFF;					
 				break;
 				case 32:
-					s.read((cast(ubyte[])(&c)[0..1])[0..4]);
+					s.read(TA(c)[0..4]);
 					c = RGBA.toBGRA(c);
 				break;
 				default: throw(new Exception(format("Invalid TGA Color Map Depth %d", h.colourmapdepth)));
@@ -198,11 +211,13 @@ class ImageFileFormat_TGA : ImageFileFormat {
 	}
 	
 	override int check(Stream s) {
-		TGA_Header h; s.read(cast(ubyte[])(&h)[0..1]);
+		TGA_Header h; s.read(TA(h));
 		switch (h.datatypecode) {
 			default: return 0;
 			case 0, 1, 2, 3, 9, 10, 11, 32, 33: break;
 		}
+
+		if (h.width > 4096 || h.height > 4096) return 0;
 		
 		return 5;
 	}	
