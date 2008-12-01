@@ -25,6 +25,15 @@ void convert(char[] name) {
 	
 	foreach (k, ic; i.childs) {
 		Stream fs = new MemoryStream();
+		
+		writefln(ic.ncolor);
+		
+		int pal = 2;
+		
+		for (int n = 0; n < 16; n++) {
+			writefln("%d <- %d", n, n + 16 * pal);
+			ic.color(n, ic.color(n + 16 * pal));
+		}
 	
 		Image ic32 = new Bitmap32(ic.width, ic.height); ic32.copyFrom(ic);
 		ImageFileFormatProvider["png"].write(ic32, fs);

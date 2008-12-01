@@ -79,6 +79,8 @@ class ImageFileFormat_TM2 : ImageFileFormat {
 			// Leemos la imagen
 			dimage.length = teh.ImageSize; s.read(dimage);
 			
+			//writefln(teh.ImageType);
+			
 			switch (teh.ImageType) {
 				default: throw(new Exception(std.string.format("Unknown TIM2 Image Type 0x%02X", teh.ImageType)));
 				case 0x05: // con paleta (4 bits) 8bpp
@@ -138,6 +140,7 @@ class ImageFileFormat_TM2 : ImageFileFormat {
 								RGBA c = RGBA(palette[n * pbpp + 0], palette[n * pbpp + 1], palette[n * pbpp + 2]);
 								if (pbpp > 3) c.a = palette[n * pbpp + 3];
 								i.color(n, c);
+								//writefln("%02X%02X%02X%02X", c.r, c.g, c.b, c.a);
 							}
 						break;
 					}
