@@ -1,8 +1,7 @@
-module simple_image_png;
+module si_png;
 
-import simple_image;
+import si;
 import std.zlib;
-import crc32;
 
 // SPECS: http://www.libpng.org/pub/png/spec/iso/index-object.html
 class ImageFileFormat_PNG : ImageFileFormat {
@@ -30,24 +29,8 @@ class ImageFileFormat_PNG : ImageFileFormat {
 			s.write(cast(ubyte[])type);
 			s.write(cast(ubyte[])data);
 
-			/*
-			if (false) {
-				//crc = init_crc32;
-				crc = 0;
-				foreach (c; cast(ubyte[])type) crc = update_crc32(c, crc);
-				foreach (c; cast(ubyte[])data) crc = update_crc32(c, crc);
-			} else if (false) {
-				crc = etc.c.zlib.crc32_combine(
-					etc.c.zlib.crc32(0, cast(ubyte *)type.ptr, type.length),
-					etc.c.zlib.crc32(0, cast(ubyte *)data.ptr, data.length),
-					data.length
-				);
-			} else {
-			*/
-				ubyte[] full = cast(ubyte[])type ~ cast(ubyte[])data;
-				crc = etc.c.zlib.crc32(0, cast(ubyte *)full.ptr, full.length);
-				//crc = 0;
-			//}
+			ubyte[] full = cast(ubyte[])type ~ cast(ubyte[])data;
+			crc = etc.c.zlib.crc32(0, cast(ubyte *)full.ptr, full.length);
 
 			s.write(bswap(crc));
 		}
@@ -116,8 +99,10 @@ class ImageFileFormat_PNG : ImageFileFormat {
 		h.interlace = 0;
 
 		writeIHDR();
-		if (i.hasPalette) writePLTE();
-		writetRNS();
+		if (i.hasPalette) {
+			writePLTE();
+			writetRNS();
+		}
 		writeIDAT();
 		writeIEND();
 

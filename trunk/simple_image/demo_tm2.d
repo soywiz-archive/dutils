@@ -1,4 +1,6 @@
-import simple_image.simple_image;
+import demo;
+
+import simple_image;
 
 import std.stream;
 import std.stdio;
@@ -6,7 +8,7 @@ import std.stdio;
 int main(char[][] args) {
 	Image i;
 	
-	i = ImageFileFormatProvider.read(new File("S_DB_GAME.TM2"));
+	i = ImageFileFormatProvider.read(new File("TV_ANI.TM2"));
 
 	foreach (k, ic; i.childs) {
 		Image ic32 = new Bitmap32(ic.width, ic.height);

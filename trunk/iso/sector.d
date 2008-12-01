@@ -27,7 +27,7 @@ ubyte[] GenerateSector(ubyte[] data, ubyte[] _data, int minute, int second, int 
 			
 			void process(int t) {
 				uint sum = base + DQ[t][i];
-				if (sum >= ((1 << RS_L12_BITS)-1)) sum -= (1 << RS_L12_BITS)-1;
+				if (sum >= ((1 << RS_L12_BITS) - 1)) sum -= (1 << RS_L12_BITS) - 1;
 				output[26 * 2 * t + n] ^= rs_l12_alog[sum];
 			}
 			
