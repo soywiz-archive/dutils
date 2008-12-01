@@ -1,16 +1,36 @@
 module si;
 
-public import std.stream, std.stdio, std.intrinsic, std.string;
-import std.path;
-import std.math;
-import std.file;
-import std.process;
+public import
+	std.stream, 
+	std.stdio, 
+	std.intrinsic, 
+	std.path,
+	std.math,
+	std.file,
+	std.process,
+	std.string
+;
 
 int imin(int a, int b) { return (a < b) ? a : b; }
 int imax(int a, int b) { return (a > b) ? a : b; }
 int iabs(int a) { return (a < 0) ? -a : a; }
 
-template TA(T) { ubyte[] TA(inout T t) { return (cast(ubyte *)&t)[0..T.sizeof]; } }
+template TA(T) { ubyte[] TA(inout T t) { return cast(ubyte[])(&t)[0..1]; } }
+
+class Bit {
+	final static uint MASK(ubyte size) {
+		return ((1 << size) - 1);
+	}
+	
+	final static uint INS(uint v, ubyte pos, ubyte size, int iv) {
+		uint mask = MASK(size);
+		return (v & ~(mask << pos)) | ((iv & mask) << pos);
+	}
+	
+	final static uint EXT(uint v, ubyte pos, ubyte size) {
+		return (v >> pos) & MASK(size);
+	}
+}
 
 class ImageFileFormatProvider {
 	static ImageFileFormat[char[]] list;
@@ -64,8 +84,15 @@ abstract class ImageFileFormat {
 	
 	Image read(Stream s) { throw(new Exception("Reading not implemented")); return null; }
 	Image[] readMultiple(Stream s) { throw(new Exception("Multiple reading not implemented")); return null; }
-	int check(Stream s) { return 0; }
+
 	char[] identifier() { return "null"; }
+	
+	// 0 - impossible (discard)
+	//
+	// ... different levels of probability (uses the most probable)
+	//
+	// 10 - for sure (use this)
+	int check(Stream s) { return 0; }
 }
 
 // TrueColor pixel
@@ -92,6 +119,8 @@ align(1) struct RGBA {
 		return c;
 	}
 }
+
+static assert (RGBA.sizeof == 4);
 
 // Abstract Image
 abstract class Image {
@@ -221,8 +250,11 @@ abstract class Image {
 		}
 	}
 	
-	void write(char[] format, char[] file) { ImageFileFormatProvider[format].write(this, file); }
-	void write(char[] format, Stream file) { ImageFileFormatProvider[format].write(this, file); }
+	void write(char[] file, char[] format = null) {
+		if (format is null) format = getExt(file);
+		ImageFileFormatProvider[format].write(this, file);
+	}
+	void write(Stream file, char[] format) { ImageFileFormatProvider[format].write(this, file); }
 }
 
 // TrueColor Bitmap

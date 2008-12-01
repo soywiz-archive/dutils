@@ -18,6 +18,7 @@ uint c565_16_32(ushort c) {
 	cc.g = ((((cast(uint)c) >>  5) & 0b00111111) * 255) / 0b00111111;
 	cc.b = ((((cast(uint)c) >> 11) & 0b00011111) * 255) / 0b00011111;
 	cc.a = 0xFF;
+	
 	return cc.v;
 }
 
@@ -77,7 +78,7 @@ class GIM_Image : Image {
 	}
 
 	void readHeader(Stream s) {
-		s.readExact(&header, header.sizeof);
+		s.read(TA(header));
 		data = new uint[header.width * header.height];
 	}
 

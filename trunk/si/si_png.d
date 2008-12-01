@@ -35,7 +35,7 @@ class ImageFileFormat_PNG : ImageFileFormat {
 			s.write(bswap(crc));
 		}
 
-		void writeIHDR() { writeChunk("IHDR", (cast(ubyte *)&h)[0..h.sizeof]); }
+		void writeIHDR() { writeChunk("IHDR", TA(h)); }
 		void writeIEND() { writeChunk("IEND", []); }
 
 		void writeIDAT() {
@@ -130,7 +130,7 @@ class ImageFileFormat_PNG : ImageFileFormat {
 
 			switch (cast(char[])type) {
 				case "IHDR":
-					s.read((cast(ubyte *)&h)[0..h.sizeof]);
+					s.read(TA(h));
 					h.width = bswap(h.width); h.height = bswap(h.height);
 
 					switch (h.ctype) {
