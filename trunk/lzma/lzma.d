@@ -1,50 +1,129 @@
+module lzma;
+
 import std.stdio, std.file, std.string;
 
-alias ushort CProb;
+extern (C) {
+	enum SRes {
+		SZ_OK = 0,
 
-struct CLzmaProperties { int lc, lp, pb; }
-struct CLzmaDecoderState { CLzmaProperties Properties; CProb* Probs; }
+		SZ_ERROR_DATA = 1,
+		SZ_ERROR_MEM = 2,
+		SZ_ERROR_CRC = 3,
+		SZ_ERROR_UNSUPPORTED = 4,
+		SZ_ERROR_PARAM = 5,
+		SZ_ERROR_INPUT_EOF = 6,
+		SZ_ERROR_OUTPUT_EOF = 7,
+		SZ_ERROR_READ = 8,
+		SZ_ERROR_WRITE = 9,
+		SZ_ERROR_PROGRESS = 10,
+		SZ_ERROR_FAIL = 11,
+		SZ_ERROR_THREAD = 12,
 
-const uint LZMA_RESULT_OK = 0;
-const uint LZMA_RESULT_DATA_ERROR = 1;
+		SZ_ERROR_ARCHIVE = 16,
+		SZ_ERROR_NO_ARCHIVE = 17
+	}
+	alias ushort CLzmaProb;
 
-const uint LZMA_BASE_SIZE = 1846;
-const uint LZMA_LIT_SIZE = 768;
-const uint LZMA_PROPERTIES_SIZE = 5;
+	const uint LZMA_PROPS_SIZE = 5;
+	const uint LZMA_REQUIRED_INPUT_MAX = 20;
 
-extern(C) int LzmaDecode(CLzmaDecoderState* vs, ubyte* inStream, uint inSize, uint* inSizeProcessed, ubyte* outStream, uint outSize, uint* outSizeProcessed);
-extern(C) int LzmaDecodeProperties(CLzmaProperties* propsRes, ubyte* propsData, int size);
-int LzmaGetNumProbs(CLzmaProperties Properties) { return (LZMA_BASE_SIZE + (LZMA_LIT_SIZE << (Properties.lc + Properties.lp))); }
+	struct ISzAlloc {
+		void *(*Alloc)(void *p, int size);
+		void (*Free)(void *p, void *address); /* address can be 0 */
+		uint data;
+	}
 
+	struct CLzmaProps {
+		uint lc, lp, pb;
+		uint dicSize;
+	}
 
-ubyte[] LzmaDecode(ubyte[] d_in) {
-	CLzmaDecoderState vs;
-	CProb[] cprobs;
-	uint outSize;
-	uint inSize = d_in.length;
-	ubyte[] r;
-
-	try {
-		if (LzmaDecodeProperties(&vs.Properties, d_in.ptr, LZMA_PROPERTIES_SIZE) != LZMA_RESULT_OK) throw(new Exception("Invalid LZMA header"));
-
-		cprobs = new CProb[LzmaGetNumProbs(vs.Properties)];
-		vs.Probs = cprobs.ptr;
-		
-		outSize = cast(uint)*(cast(ulong *)(d_in.ptr + LZMA_PROPERTIES_SIZE));
-		
-		if (outSize > 0x4000000) throw(new Exception(format("Too big output %d", outSize)));
-		
-		r.length = outSize;
-		
-		ubyte *inData = (d_in.ptr + LZMA_PROPERTIES_SIZE + 8);
-		
-		if (LzmaDecode(&vs, inData, inSize, &inSize, r.ptr, outSize, &outSize) != LZMA_RESULT_OK) throw(new Exception("Invalid LZMA stream"));
-		if (outSize != r.length) throw(new Exception("Invalid LZMA stream output size"));
-	} finally {
-		cprobs.length = 0;
+	struct CLzmaDec {
+		CLzmaProps prop;
+		CLzmaProb *probs;
+		ubyte* dic;
+		ubyte* buf;
+		uint range, code;
+		uint dicPos;
+		uint dicBufSize;
+		uint processedPos;
+		uint checkDicSize;
+		uint state;
+		uint reps[4];
+		uint remainLen;
+		int needFlush;
+		int needInitState;
+		uint numProbs;
+		uint tempBufSize;
+		ubyte tempBuf[LZMA_REQUIRED_INPUT_MAX];
 	}
 	
-	return r;
+	enum ELzmaStatus {
+		LZMA_STATUS_NOT_SPECIFIED,               /* use main error code instead */
+		LZMA_STATUS_FINISHED_WITH_MARK,          /* stream was finished with end mark. */
+		LZMA_STATUS_NOT_FINISHED,                /* stream was not finished */
+		LZMA_STATUS_NEEDS_MORE_INPUT,            /* you must provide more input bytes */
+		LZMA_STATUS_MAYBE_FINISHED_WITHOUT_MARK  /* there is probability that stream was finished without end mark */
+	}
+	
+	enum ELzmaFinishMode {
+		LZMA_FINISH_ANY,   /* finish at any point */
+		LZMA_FINISH_END    /* block must be finished at the end */
+	}
+
+	SRes LzmaProps_Decode(CLzmaProps *p, ubyte* data, uint size);
+	void LzmaDec_Init(CLzmaDec *p);
+
+	SRes LzmaDec_AllocateProbs(CLzmaDec* p, ubyte* props, uint propsSize, ISzAlloc* alloc);
+	void LzmaDec_FreeProbs(CLzmaDec* p, ISzAlloc* alloc);
+
+	SRes LzmaDec_Allocate(CLzmaDec* state, ubyte* prop, uint propsSize, ISzAlloc* alloc);
+	void LzmaDec_Free(CLzmaDec* state, ISzAlloc* alloc);
+	
+	SRes LzmaDec_DecodeToDic(CLzmaDec *p, uint dicLimit, ubyte* src, uint* srcLen, ELzmaFinishMode finishMode, ELzmaStatus* status);
+	SRes LzmaDec_DecodeToBuf(CLzmaDec *p, ubyte* dest, uint* destLen, ubyte* src, uint* srcLen, ELzmaFinishMode finishMode, ELzmaStatus* status);
+	SRes LzmaDecode(ubyte* dest, uint* destLen, ubyte* src, uint* srcLen, ubyte* propData, uint propSize, ELzmaFinishMode finishMode, ELzmaStatus* status, ISzAlloc* alloc);
+	
+	void* Alloc(void *p, int length) { return std.c.stdlib.malloc(length); }
+	void Free(void *p, void* address) { std.c.stdlib.free(address); }
+}
+
+ubyte[] LzmaDecode(ubyte[] i) {
+	ubyte[] o;
+	
+	SRes res;
+	ISzAlloc alloc;
+	CLzmaDec state;
+	CLzmaProps[] cprobs;
+	ELzmaStatus status;
+	
+	alloc.Alloc = &Alloc;
+	alloc.Free = &Free;
+	
+	if ((res = LzmaProps_Decode(&state.prop, i.ptr, LZMA_PROPS_SIZE)) != SRes.SZ_OK) throw(new Exception("Invalid LZMA header"));
+
+	uint outLength = cast(uint)*(cast(ulong *)(i.ptr + LZMA_PROPS_SIZE));
+	if (outLength > 0x4000000) throw(new Exception(format("Too big output %d", outLength)));
+	
+	LzmaDec_Init(&state);
+	LzmaDec_Allocate(&state, i.ptr, LZMA_PROPS_SIZE, &alloc);
+	
+	try {
+		int start_off = LZMA_PROPS_SIZE + 8;
+		ubyte *inData = i.ptr + start_off;
+		uint inLength = i.length - start_off;
+		o.length = outLength;
+		
+		if ((res = LzmaDec_DecodeToBuf(&state, o.ptr, &outLength, inData, &inLength, ELzmaFinishMode.LZMA_FINISH_END, &status)) != SRes.SZ_OK) {
+			throw(new Exception(format("Can't decode buffer %d")));
+		}
+	} catch (Exception e) {
+		o.length = 0;
+	} finally {
+		LzmaDec_Free(&state, &alloc);
+	}
+	
+	return o;
 }
 
 alias LzmaDecode decode;

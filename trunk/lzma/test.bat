@@ -1,0 +1,1 @@
+@dmd lzma.d LzmaDec.obj -run test.d
