@@ -127,11 +127,12 @@ align(1) struct RGBA {
 	}
 	
 	static int dist(RGBA a, RGBA b) {
+		alias std.math.abs abs;
 		return (
-			Math.abs(a._r - b._r) +
-			Math.abs(a._g - b._g) +
-			Math.abs(a._b - b._b) +
-			Math.abs(a._a - b._a) +
+			abs(a._r - b._r) +
+			abs(a._g - b._g) +
+			abs(a._b - b._b) +
+			abs(a._a - b._a) +
 		0);
 	}
 }
@@ -289,6 +290,12 @@ class Bitmap32 : Image {
 		_width = w;
 		_height = h;
 		data.length = w * h;
+	}
+	
+	static Bitmap32 convert(Image i) {
+		auto r = new Bitmap32(i.width, i.height);
+		for (int y = 0; y < r._height; y++) for (int x = 0; x < r._width; x++) r.set32(x, y, i.get32(x, y));
+		return r;
 	}
 }
 
