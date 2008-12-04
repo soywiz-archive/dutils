@@ -1,4 +1,4 @@
-#labels bmp,tga,png,gim,tm2,tim2
+#labels bmp,tga,png,gim,tm2,tim2,psd
 simple_image is a very lightweight library for load, manipulate and save color-mapped and true color images without any dependences.
 
 Reading:
@@ -7,11 +7,10 @@ Reading:
   * PNG
   * GIM
   * TM2
+  * PSD
 
 Writing:
   * TGA
   * PNG
-
-Updating:
-  * GIM
-  * TM2
+  * GIM _(updating)_
+  * TM2 _(updating)_
