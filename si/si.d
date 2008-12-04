@@ -99,16 +99,23 @@ abstract class ImageFileFormat {
 align(1) struct RGBA {
 	union {
 		struct { ubyte r; ubyte g; ubyte b; ubyte a; }
+		struct { byte _r; byte _g; byte _b; byte _a; }
 		ubyte[4] vv;
 		uint v;
 	}
 	
 	static RGBA opCall(ubyte r, ubyte g, ubyte b, ubyte a = 0xFF) {
-		RGBA c;
+		RGBA c = void;
 		c.r = r;
 		c.g = g;
 		c.b = b;
 		c.a = a;
+		return c;
+	}
+	
+	static RGBA opCall(uint v) {
+		RGBA c = void;
+		c.v = v;
 		return c;
 	}
 	
@@ -117,6 +124,15 @@ align(1) struct RGBA {
 		c.r = c.b;
 		c.b = r;
 		return c;
+	}
+	
+	static int dist(RGBA a, RGBA b) {
+		return (
+			Math.abs(a._r - b._r) +
+			Math.abs(a._g - b._g) +
+			Math.abs(a._b - b._b) +
+			Math.abs(a._a - b._a) +
+		0);
 	}
 }
 
