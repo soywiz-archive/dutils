@@ -534,6 +534,8 @@ class Entry : FS_Entry
 	long num = 1;
 	long num_folder;
 	
+	override long size() { return dr.Size.v; }
+	
 	this(char[] name, Iso iso, DirectoryRecord dr, ISO9660_XA xa = xa.init) {
 		init(name, iso);
 		this.dr = dr;
@@ -969,9 +971,9 @@ class Iso : FS_Entry {
 		if (!stream) throw(new Exception("Not opened stream"));
 		long pos = dr.Extent.v * 0x800;
 		if (grow) {
-			return new SliceStreamNoClose(stream, pos, pos + dr.Size.v);
-		} else {
 			return new SliceStreamNoClose(stream, pos);
+		} else {
+			return new SliceStreamNoClose(stream, pos, pos + dr.Size.v);
 		}
 	}	
 	
