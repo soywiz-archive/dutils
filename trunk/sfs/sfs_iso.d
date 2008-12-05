@@ -460,6 +460,21 @@ class FileLatent : StreamLatent
 	}
 }
 
+class DummyLatent : StreamLatent {
+	Stream s;
+
+	this(Stream s) {
+		this.s = s;
+		this.readable  = true;
+		this.writeable = false;
+		this.seekable  = true;
+	}
+	
+	Stream open() {
+		return s;
+	}
+}
+
 class FS_Entry_Latent : StreamLatent {
 	FS_Entry file;
 	
@@ -767,6 +782,9 @@ class SliceStreamNoClose : SliceStream {
 
 class Iso : FS_Entry {
 	void delegate(Entry e, ref Entry.Info i) set_info;
+	
+	void delegate(FS_Entry e, long pos, long max) write_tick;
+	
 	Entry root, last;
 	long start_dr_lba;
 	bool xa = true;
@@ -797,12 +815,15 @@ class Iso : FS_Entry {
 	}
 	
 	void writeEntries(Stream s) {
-		writefln("writeEntries (b)");
-		foreach (e; entries) if (!e.info.linked) e.writeSelf(new SliceStream(s, e.starts_at));
+		//writefln("writeEntries (b)");
+		foreach (k, e; entries) {
+			if (write_tick) write_tick(e, k, entries.length);
+			if (!e.info.linked) e.writeSelf(new SliceStream(s, e.starts_at));
+		}
 	}
 	
 	void writeSystem(Stream s) {
-		writefln("writeSystem");
+		//writefln("writeSystem");
 		s.position = 0;
 		s.write(new ubyte[0x800 * (0x10 - 2)]);
 		ubyte[] d = new ubyte[0x800 * 2];
@@ -811,7 +832,7 @@ class Iso : FS_Entry {
 	}
 	
 	void setEntriesPositions() {
-		writefln("setEntriesPositions");
+		//writefln("setEntriesPositions");
 		
 		long l = 0;
 
@@ -819,7 +840,7 @@ class Iso : FS_Entry {
 		root._starts_at_nobase = l;
 		l += root.length_sec;
 
-		writefln("setEntriesPositions (1)");
+		//writefln("setEntriesPositions (1)");
 		
 		// Folders
 		Entry[] ff = folders2();
@@ -829,17 +850,17 @@ class Iso : FS_Entry {
 			l += e.length_sec;
 		}
 
-		writefln("setEntriesPositions (2)");
+		//writefln("setEntriesPositions (2)");
 
 		// Files not linked
 		foreach (k, e; files) {
 			if (e.info.linked) continue;
-			writefln(k);
+			//writefln(k);
 			e._starts_at_nobase = l;
 			l += e.length_sec;
 		}
 		
-		writefln("setEntriesPositions (3)");
+		//writefln("setEntriesPositions (3)");
 		
 		// Files linked
 		foreach (e; files) {
@@ -848,7 +869,7 @@ class Iso : FS_Entry {
 			e._starts_at_nobase = e.info.linked._starts_at_nobase;
 		}
 		
-		writefln("/setEntriesPositions");
+		//writefln("/setEntriesPositions");
 	}
 
 	long folders_size() {
@@ -865,7 +886,7 @@ class Iso : FS_Entry {
 	}
 	
 	void writeFolders(Stream s, int type = 0) {
-		writefln("writeFolders");
+		//writefln("writeFolders");
 		//auto buf = new MemoryStream();
 		auto buf = s;
 		
@@ -879,7 +900,7 @@ class Iso : FS_Entry {
 	}
 	
 	void writePVD(Stream s) {
-		writefln("writePVD");
+		//writefln("writePVD");
 		long folders_size_bytes = folders_size;
 		long folders_size_sec = Entry.sectors_for(folders_size_bytes);
 		start_dr_lba = 0x12 + folders_size_sec * 4;
@@ -941,7 +962,7 @@ class Iso : FS_Entry {
 			e = cast(Entry)root["UMD_DATA.BIN"];
 			auto ss = new SliceStream(e.info.s, 0);
 			GameId = ss.readString(32);
-			writefln("UMD_DATA.BIN: %s", GameId);
+			//writefln("UMD_DATA.BIN: %s", GameId);
 		} catch (Exception e) {
 			writefln("no UMD_DATA.BIN (%s)", e.toString);
 		}
