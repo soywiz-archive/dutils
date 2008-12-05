@@ -1,6 +1,6 @@
 module sfs;
 
-import std.string, std.stream, std.file, std.path, std.stdio;
+import std.string, std.stream, std.file, std.path, std.stdio, std.date;
 
 class FS_Entry {
 	char[] name;
@@ -28,6 +28,17 @@ class FS_Entry {
 	FS_Entry parent() { return this; }
 	FS_Entry[] childs() { return []; }
 	
+    int opApply(int delegate(inout FS_Entry) callback) {
+		int result;
+
+		foreach (e; childs) {
+			result = callback(e);
+			if (result) break;
+		}
+		
+		return result;
+    }
+	
 	protected FS_Entry _child(char[] name) {
 		foreach (child; childs) if (child.name == name) return child;
 		return null;
@@ -42,12 +53,12 @@ class FS_Entry {
 	bool is_dir() { return true; }
 	bool exists() { return is_file || is_dir; }
 	
-	ulong atime() { return 0; }
-	ulong atime(ulong) { return 0; }
-	ulong mtime() { return 0; }
-	ulong mtime(ulong) { return 0; }
-	ulong ctime() { return 0; }
-	ulong ctime(ulong) { return 0; }
+	d_time atime() { return 0; }
+	d_time atime(ulong) { return 0; }
+	d_time mtime() { return 0; }
+	d_time mtime(ulong) { return 0; }
+	d_time ctime() { return 0; }
+	d_time ctime(ulong) { return 0; }
 	
 	ulong attribs() { return 0; }
 	ulong attribs(ulong) { return 0; }
@@ -57,6 +68,13 @@ class FS_Entry {
 
 	ulong group() { return 0; }
 	ulong group(ulong) { return 0; }
+	
+	long size() {
+		auto s = open();
+		long r = s.size;
+		close();
+		return r;
+	}
 	
 	Stream open(FileMode mode = FileMode.In, bool grow = false) { throw(new Exception("Not implemented: 'open'")); }
 	void close() { throw(new Exception("Not implemented: 'close'")); }
@@ -90,16 +108,42 @@ class FS_Entry {
 		int pos = find(path, "/");
 		char[] base, sub;
 		
-		writefln(this);
+		//writefln(this);
 		
 		if (pos >= 0) return child2(path[0..pos])[path[pos + 1..path.length]];
 		
 		return child2(path);
 	}
+	
+	/*Entry opIndex(char[] name) {
+		int idx = find(name, "/");
+		
+		if (idx == -1) {
+			if (name == ".") return this;
+			if (name == "..") return parent_self;
+			foreach (e; _childs) if (e.name == name) return e; throw(new Exception("Not found '" ~ name ~ "'"));
+		}
+		return this[name[0..idx]][name[idx+1..name.length]];
+	}*/	
+	
+	void opCatAssign(FS_Entry e) { }
 }
+
+import std.c.windows.windows;
 
 class Directory : FS_Entry {
 	char[] path;
+	long _size = -1;
+	d_time _time_write;
+	
+	override d_time atime() { return _time_write; }
+	override d_time ctime() { return _time_write; }
+	override d_time mtime() { return _time_write; }
+	
+	override long size() {
+		if (_size == -1) _size = std.file.getSize(path);
+		return _size;
+	}
 	
 	this(char[] path, char[] name = null, FS_Entry parent = null) {
 		if (name is null) name = getBaseName(path);
@@ -139,19 +183,48 @@ class Directory : FS_Entry {
 	
 	override void _flush() { cached = false; }
 	
+	private void listdir() {
+		int strlen(wchar* c) { int l; while (*(c++)) l++; return l; }
+		HANDLE h;
+		WIN32_FIND_DATAW fileinfo;
+		
+		h = FindFirstFileW(std.utf.toUTF16z(std.path.join(path, "*.*")), &fileinfo);
+		if (h == INVALID_HANDLE_VALUE) return;
+		
+		try {
+			do
+			{
+				wchar* ptr = fileinfo.cFileName.ptr;
+				char[] cname = std.utf.toUTF8(ptr[0..strlen(ptr)]);
+				if (cname == "." || cname == "..") continue;
+				
+				auto d = new Directory(child_path(cname), cname, this);
+				d._directory = (fileinfo.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+				d._cached_is_file_dir = true;
+				d._size = (fileinfo.nFileSizeHigh << 32) | (fileinfo.nFileSizeLow << 0);
+				d._time_write = std.date.FILETIME2d_time(&fileinfo.ftLastWriteTime);
+				_childs ~= d;
+				
+			} while (FindNextFileW(h, &fileinfo) != FALSE);
+		}
+		finally
+		{
+			FindClose(h);
+		}	
+	}
+	
 	bool cached; FS_Entry[] _childs;
 	FS_Entry[] childs() {
 		if (!cached) {
-			foreach (cname; listdir(path)) {
-				_childs ~= new Directory(child_path(cname), cname, this);
-			}
+			listdir();
 			cached = true;
 		}
 		return _childs;
 	}
 
-	override bool is_file() { try { return std.file.isfile(path) != 0; } catch { return false; } }
-	override bool is_dir() { try { return std.file.isdir(path) != 0; } catch { return false; } }
+	bool _cached_is_file_dir, _directory;
+	override bool is_file() { if (_cached_is_file_dir) return !_directory; try { return std.file.isfile(path) != 0; } catch { return false; } }
+	override bool is_dir() { if (_cached_is_file_dir) return _directory; try { return std.file.isdir(path) != 0; } catch { return false; } }
 }
 
 version (test_sfs) {
