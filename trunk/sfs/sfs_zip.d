@@ -167,9 +167,10 @@ class ZipArchive : ZipEntry {
 	}
 }
 
+/*
 void main() {
 	auto zip = new ZipArchive("lzma.zip");
 	//auto zip = new ZipArchive("deflate.zip");
 	writefln(zip["test/prueba.txt"].read());
 }
-
+*/
