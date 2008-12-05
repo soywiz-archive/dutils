@@ -526,7 +526,6 @@ class Entry : FS_Entry
 	
 	protected Entry prev, next;
 	
-	protected Entry parent;
 	protected Entry[] _childs, folders, files;
 	//public char[] name;
 	
@@ -758,6 +757,12 @@ class Folder : Entry
 	this(char[] name = "", Iso iso = null) { folder = true; super(name, iso); }
 }
 
+class SliceStreamNoClose : SliceStream {
+	this(Stream s, long p) { super(s, p); }
+	this(Stream s, long p, long l) { super(s, p, l); }
+	override void close() { }
+}
+
 class Iso : FS_Entry {
 	void delegate(Entry e, ref Entry.Info i) set_info;
 	Entry root, last;
@@ -961,11 +966,12 @@ class Iso : FS_Entry {
 	Stream stream;
 	
 	Stream open(DirectoryRecord dr, FileMode mode = FileMode.In, bool grow = false) {
+		if (!stream) throw(new Exception("Not opened stream"));
 		long pos = dr.Extent.v * 0x800;
 		if (grow) {
-			return new SliceStream(stream, pos, pos + dr.Size.v);
+			return new SliceStreamNoClose(stream, pos, pos + dr.Size.v);
 		} else {
-			return new SliceStream(stream, pos);
+			return new SliceStreamNoClose(stream, pos);
 		}
 	}	
 	
