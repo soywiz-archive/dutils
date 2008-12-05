@@ -88,7 +88,7 @@ extern (C) {
 	void Free(void *p, void* address) { std.c.stdlib.free(address); }
 }
 
-ubyte[] LzmaDecode(ubyte[] i) {
+ubyte[] LzmaDecode(ubyte[] i, long size = -1) {
 	ubyte[] o;
 	
 	SRes res;
@@ -100,16 +100,25 @@ ubyte[] LzmaDecode(ubyte[] i) {
 	alloc.Alloc = &Alloc;
 	alloc.Free = &Free;
 	
-	if ((res = LzmaProps_Decode(&state.prop, i.ptr, LZMA_PROPS_SIZE)) != SRes.SZ_OK) throw(new Exception("Invalid LZMA header"));
+	long prop_pos = 0;
+	long data_pos = LZMA_PROPS_SIZE;
+	
+	if ((res = LzmaProps_Decode(&state.prop, i.ptr + prop_pos, LZMA_PROPS_SIZE)) != SRes.SZ_OK) throw(new Exception("Invalid LZMA header"));
 
-	uint outLength = cast(uint)*(cast(ulong *)(i.ptr + LZMA_PROPS_SIZE));
+	uint outLength;
+	if (size == -1) {
+		outLength = cast(uint)*(cast(ulong *)(i.ptr + data_pos));
+		data_pos += 8;
+	} else {
+		outLength = size;
+	}
 	if (outLength > 0x4000000) throw(new Exception(format("Too big output %d", outLength)));
 	
 	LzmaDec_Init(&state);
 	LzmaDec_Allocate(&state, i.ptr, LZMA_PROPS_SIZE, &alloc);
 	
 	try {
-		int start_off = LZMA_PROPS_SIZE + 8;
+		int start_off = data_pos;
 		ubyte *inData = i.ptr + start_off;
 		uint inLength = i.length - start_off;
 		o.length = outLength;

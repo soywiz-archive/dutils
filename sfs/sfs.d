@@ -2,6 +2,9 @@ module sfs;
 
 import std.string, std.stream, std.file, std.path, std.stdio, std.date;
 
+template TA(T) { ubyte[] TA(inout T t) { return (cast(ubyte *)&t)[0..T.sizeof]; } }
+template TA2(T) { ubyte[] TA2(T t) { return cast(ubyte[])(t[0..T.length]); } }
+
 class FS_Entry {
 	char[] name;
 	FS_Entry _parent;
