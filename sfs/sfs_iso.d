@@ -555,11 +555,6 @@ class Entry : FS_Entry
 		init(name, iso);
 	}
 
-	Entry parent_self() { return parent ? parent : this; }
-
-	// Path of the file
-	char[] path() { return parent ? (parent.path ~ "/" ~ name) : name; }
-	
 	long _length = -1;
 	long length(int level = 0) {
 		assert(level < 0x10, "Detected loop at starts_at. linked");
