@@ -744,7 +744,7 @@ class Entry : FS_Entry
 	
 	bool is_root() { return iso.root is this; }
 	
-	void opCatAssign(Entry e) {
+	override void opCatAssign(FS_Entry _e) { Entry e = cast(Entry)_e;
 		assert(e.parent is null);
 		e.parent = this; _childs ~= e;
 		if (e.folder) folders ~= e; else files ~= e;
