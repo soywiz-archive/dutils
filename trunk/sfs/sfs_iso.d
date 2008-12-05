@@ -460,6 +460,21 @@ class FileLatent : StreamLatent
 	}
 }
 
+class FS_Entry_Latent : StreamLatent {
+	FS_Entry file;
+	
+	this(FS_Entry file) {
+		this.file      = file;
+		this.readable  = true;
+		this.writeable = false;
+		this.seekable  = true;
+	}
+	
+	Stream open() {
+		return file.open;
+	}	
+}
+
 static int do_pad(int pos, int size = 0x800) {
 	if ((pos % size) != 0) return size - (pos % size);
 	return 0;
