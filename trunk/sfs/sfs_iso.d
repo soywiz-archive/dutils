@@ -562,7 +562,7 @@ class Entry : FS_Entry
 		if (folder) {
 			long[] ll;
 			
-			ll ~= parent_self.dr_size(1);
+			ll ~= (cast(Entry)parent_self).dr_size(1);
 			ll ~= this.dr_size(2);
 			foreach (child; _childs) ll ~= child.dr_size(0);
 			
@@ -585,7 +585,7 @@ class Entry : FS_Entry
 		
 		if (folder) {
 			this.write_dr(s, 1);
-			parent_self.write_dr(s, 2);
+			(cast(Entry)parent_self).write_dr(s, 2);
 			
 			foreach (child; _childs) {
 				write_dummy(s, do_pad_if_exceeds(s.position, child.dr_size(0)));
@@ -714,10 +714,10 @@ class Entry : FS_Entry
 		s.write(l);
 		if (type == 0) {
 			s.write(cast(uint)starts_at_sector);
-			s.write(cast(ushort)parent_self.num_folder);
+			s.write(cast(ushort)(cast(Entry)parent_self).num_folder);
 		} else {
 			s.write(cast(uint)bswap(starts_at_sector));
-			s.write(cast(ushort)(bswap(parent_self.num_folder) >> 16));
+			s.write(cast(ushort)(bswap((cast(Entry)parent_self).num_folder) >> 16));
 		}
 		if (is_root) {
 			s.write(cast(ubyte)0);
