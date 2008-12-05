@@ -77,11 +77,20 @@ class FS_Entry {
 		return r;
 	}
 	
+	ubyte[] read() {
+		auto s = open;
+		ubyte[] data = new ubyte[s.size];
+		s.read(data);
+		close();
+		return data;
+	}
 	Stream open(FileMode mode = FileMode.In, bool grow = false) { throw(new Exception("Not implemented: 'open'")); }
-	void close() { throw(new Exception("Not implemented: 'close'")); }
-	void replace(Stream s) {
-		Stream cs = open(FileMode.OutNew);
-		
+	void close() { }
+	
+	void replace(Stream s, bool grow = false) {
+		Stream cs = open(FileMode.OutNew, grow);
+		cs.copyFrom(s);
+		close();
 	}
 	
 	protected void _flush() { }
