@@ -20,11 +20,9 @@ class FS_Entry {
 		throw(new Exception(format("Can't open or create '%s'", name)));
 	}
 
-	FS_Entry parent(FS_Entry fe) {
-		_parent = fe;
-		return _parent;
-	}
+	FS_Entry parent(FS_Entry fe) { return _parent = fe; }
 	FS_Entry parent() { return _parent; }
+	
 	FS_Entry[] childs() { return []; }
 	
 	FS_Entry parent_self() { return parent ? parent : this; }
