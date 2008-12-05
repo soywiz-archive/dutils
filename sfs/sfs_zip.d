@@ -3,7 +3,7 @@ import sfs;
 import std.string, std.stdio, std.stream, std.path, std.file;
 import std.zlib;
 
-version (lzma) {
+version (no_lzma) { } else {
 	import lzma;
 }
 
@@ -94,7 +94,7 @@ class ZipEntry : FS_Entry {
 				case 0x8: // DEFLATE
 					uncomp_data = cast(ubyte[])std.zlib.uncompress(cast(void[])comp_data, lfh.uncompressed_size, -15);
 				break;
-				version (lzma) {
+				version (no_lzma) { } else {
 					case 0xE: // LZMA
 						bool has_eos    = (lfh.flags & (1 << 1)) != 0;
 						bool strong_enc = (lfh.flags & (1 << 6)) != 0;
