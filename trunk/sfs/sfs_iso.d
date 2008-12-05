@@ -4,9 +4,6 @@ import sfs;
 import std.stream, std.stdio, std.string, std.file, std.path, std.date, std.intrinsic, std.traits, std.utf;
 import etc.c.zlib;
 
-template TA(T) { ubyte[] TA(inout T t) { return (cast(ubyte *)&t)[0..T.sizeof]; } }
-template TA2(T) { ubyte[] TA2(T t) { return cast(ubyte[])(t[0..T.length]); } }
-
 // Types
 // Signed
 alias byte  s8;
