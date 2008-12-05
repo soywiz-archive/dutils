@@ -4,7 +4,7 @@ import std.string, std.stream, std.file, std.path, std.stdio, std.date;
 
 class FS_Entry {
 	char[] name;
-	private FS_Entry _parent;
+	FS_Entry _parent;
 
 	FS_Entry[char[]] mounts;
 
@@ -22,11 +22,14 @@ class FS_Entry {
 
 	FS_Entry parent(FS_Entry fe) {
 		_parent = fe;
-		if (_parent is null) _parent = this;
 		return _parent;
 	}
-	FS_Entry parent() { return this; }
+	FS_Entry parent() { return _parent; }
 	FS_Entry[] childs() { return []; }
+	
+	FS_Entry parent_self() { return parent ? parent : this; }
+	
+	char[] path() { return parent ? (parent.path ~ "/" ~ name) : name; }
 	
     int opApply(int delegate(inout FS_Entry) callback) {
 		int result;
