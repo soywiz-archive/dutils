@@ -108,10 +108,15 @@ class FS_Entry {
 	
 	FS_Entry opIndex(char[] path) {
 		path = std.string.replace(path, "\\", "/");
-		int pos = find(path, "/");
-		char[] base, sub;
+		path = std.string.replace(path, "//", "/");
 		
-		//writefln(this);
+		if (path.length && path[0] == '/') {
+			FS_Entry c = this;
+			while (c.parent) c = c.parent;
+			return c[path[1..path.length]];
+		}
+		
+		int pos = find(path, "/");
 		
 		if (pos >= 0) return child2(path[0..pos])[path[pos + 1..path.length]];
 		
