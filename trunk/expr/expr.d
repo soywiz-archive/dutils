@@ -1,14 +1,34 @@
 module expr;
 
-import std.stdio, std.string, std.conv, std.ctype;
+import std.stdio, std.string, std.conv, std.ctype, std.traits;
 
-struct Value {
-	union { char[] _s; real _f; } bool is_str;
-	static Value opCall(char[] v) { Value vv; vv = v; return vv; }
-	static Value opCall(real v  ) { Value vv; vv = v; return vv; }
+class Value {
+	enum Type {
+		NULL,
+		STRING,
+		REAL,
+		NATIVE_FUNC,
+	}
+	
+	alias Value delegate(Value[]) FUNC_CALLBACK;
+
+	private union {
+		char[] _s;
+		real _f;
+		FUNC_CALLBACK _native_func;
+	}
+	
+	Type type;
+	
+	static char[] build_call(char[] type) { return "static Value opCall(" ~ type ~ " v) { auto vv = new Value; vv.set(v); return vv; }"; }
+	mixin(build_call("char[]"));
+	mixin(build_call("real"));
+	mixin(build_call("FUNC_CALLBACK"));
+	mixin(build_call("Value"));
+	
+	static Value opCall() { auto vv = new Value; vv.type = Type.NULL; return vv; }
 	
 	static char[] build_op(char[] type, char[] op) { return "Value op" ~ type ~ "(Value v) { return Value(f " ~ op ~ " v.f); }"; }
-	
 	mixin(build_op("Add", "+"));
 	mixin(build_op("Sub", "-"));
 	mixin(build_op("Mul", "*"));
@@ -17,8 +37,15 @@ struct Value {
 	
 	Value opNeg() { return Value(-f); }
 	
-	void opAssign(char[] v) { is_str = true;  _s = v; }
-	void opAssign(real v  ) { is_str = false; _f = v; }
+	void set(char[] v) { type = Type.STRING;  _s = v; }
+	void set(real v  ) { type = Type.REAL  ; _f = v; }
+	void set(FUNC_CALLBACK v) { type = Type.NATIVE_FUNC; _native_func = v; }
+	void set(Value v) { type = v.type; _f = v._f; }
+	
+	void opAssign(char[] v) { set(v); }
+	void opAssign(real v) { set(v); }
+	void opAssign(FUNC_CALLBACK v) { set(v); }
+	//void opAssign(Value v) { set(v); }
 	
 	int opEquals(Value  v) { return (s == v.s); }
 	int opEquals(real   v) { return (f == v  ); }
@@ -27,16 +54,37 @@ struct Value {
 	int opCmp(real   v) { return cast(int)(f - v); }
 	
 	long i() { return cast(long)f; }
-	real f() { return is_str ? std.conv.toReal(_s) : _f; }
+	real f() { return (type == Type.REAL) ? _f : std.conv.toReal(_s); }
 	alias toString s;
 	
-	char[] toString() { return is_str ? _s : std.string.toString(_f); }
+	Value call(Value[] params) {
+		assert(type == Type.NATIVE_FUNC, "Value must be a function type");
+		return _native_func(params);
+	}
+	
+	char[] toString() {
+		switch (type) {
+			case Type.REAL: return std.string.toString(_f);
+			case Type.NULL: return "null";
+			default: return _s;
+		}
+	}
 }
 
 class Expression {
 	struct Token {
-		char[] value; bool op;
-		char[] toString() { return format("TOKEN: '%s' (%s)", value, op); }
+		enum Type {
+			none,
+			number,
+			identifier,
+			operator,
+			space,
+			end,
+		}
+		Type type;
+		char[] value;
+		bool op() { return (type == Type.operator); }
+		char[] toString() { return format("TOKEN: '%s' (%d)", value, type); }
 	}
 
 	Token[] tokens;
@@ -45,6 +93,7 @@ class Expression {
 	bool  more()    { return (tokenpos < tokens.length); }
 	Token current() { return tokens[tokenpos]; }
 	void  next()    { tokenpos++; }
+	void  prev()    { tokenpos--; }
 	
 	static Value delegate(char[])[] mapvalues;
 	
@@ -87,7 +136,7 @@ class Expression {
 		bool found;
 		
 		if ((exp.length > 0) && (exp[0] < '0' || exp[0] > '9')) {
-			foreach (mv; mapvalues) try { return mv(exp); } catch { }
+			foreach (mv; mapvalues) try { auto v = mv(exp); assert(v !is null); return v; } catch { }
 			throw(new Exception(format("Unknown value '%s'", exp)));
 		}
 
@@ -102,8 +151,8 @@ class Expression {
 			switch (t.value) {
 				case "(":
 					next();
-					r = exp0;					
-					if (current.value != ")") throw(new Exception(") mismatch"));
+					r = exp0;
+					assert(current.value == ")", ") mismatch");
 					next();
 				break;
 				case "-": next(); r = -exp2; break;
@@ -111,10 +160,29 @@ class Expression {
 				default: throw(new Exception(std.string.format("Invalid operator '%s'", t.value)));
 			}
 		}
-		// Numero
+		// Valor
 		else {
-			next();			
+			next();
 			r = value(t);
+			
+			switch (current.value) {
+				case "++", "--":
+					auto r2 = Value(r);
+					switch (current.value) {
+						case "++": r.set(r.f + 1); break;
+						case "--": r.set(r.f - 1); break;
+					}
+					next();
+					r = r2;
+				break;
+				// Function call
+				/*
+				case "(":
+				break;
+				*/
+				default:
+				break;
+			}
 			//writefln("PUSH %08X (%s) %s", r, t.value, t.op);
 		}
 		
@@ -146,38 +214,78 @@ class Expression {
 	}
 	
 	this(char[] exp) {
-		int type = -1;
-		char[] s;
+		alias Token.Type Type;
+		Token token;
+		bool space;
 		
-		void flush(int ct = -1, bool force = false) {
-			if (type != -1) {
-				if (force || (type != ct && s.length)) {
-					tokens ~= Token(s, (type == 1));
-					s = "";
-					//writefln("flush");
+		void push(Type type) {
+			token.type = type;
+			tokens ~= token;
+			token.value = "";
+		}
+		
+		char[][] ops;
+		
+		ops ~= "++";
+		ops ~= "--";
+		ops ~= "(";
+		ops ~= ")";
+		ops ~= "+";
+		ops ~= "-";
+		ops ~= "*";
+		ops ~= "/";
+		ops ~= "%";
+		
+		exp ~= "\0\0\0";
+		for (int n = 0;; n++) {
+			char c = exp[n]; if (c == '\0') break;
+			if (isspace(c)) { space = true; continue; }
+			
+			if (isalnum(c) || c == '_') {
+				// number
+				if (isdigit(c) || c == '.') {
+					for (;; n++) { c = std.ctype.tolower(exp[n]);
+						bool exit = true;
+						if (isdigit(c) || c == '.') exit = false;
+						if (token.value.length == 1 && (c == 'b' || c == 'x')) exit = false;
+						if (c >= 'a' && c <= 'f') exit = false;
+						if (exit) break;
+						
+						token.value ~= c;
+					}
+					n--;
+					push(Type.number);
+				}
+				// op
+				else {
+					for (;; n++) { c = exp[n];
+						if (!isalnum(c) && c != '_') break;
+						token.value ~= c;
+					}
+					n--;
+					push(Type.identifier);
+				}
+			} else {
+				foreach (op; ops) {
+					if (op == exp[n..n + op.length]) {
+						token.value = op;
+						push(Type.operator);
+						n += op.length - 1;
+						break;
+					}
 				}
 			}
-			type = ct;
 		}
 		
-		foreach (c; std.string.tolower(exp)) {
-			if (std.ctype.isspace(c)) continue;
-			
-			// keyword/number
-			if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '.') {
-				flush(0);
-				s ~= c;
-			}
-			// operator
-			else {
-				flush(1, true);
-				s ~= c;				
-			}
-		}
+		push(Type.end);
 		
-		flush();
+		//writefln(tokens);
 		
-		tokens ~= Token("", true);
+		//flush();
+		
+		//tokens ~= Token("", true);
+		
+		//assert(0 == 1);
 		
 		//foreach (t; tokens) t.dump();
 	}
