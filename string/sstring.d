@@ -1,3 +1,5 @@
+import std.string;
+
 char[] substr(char[] s, int from, int length = 0x7FFFFFFF) {
 	if (from < 0) from += s.length; if (from < 0 || from >= s.length) return "";
 	int to = (length < 0) ? (s.length + length) : (from + length);
@@ -5,27 +7,25 @@ char[] substr(char[] s, int from, int length = 0x7FFFFFFF) {
 	return (from <= to) ? s[from..to] : "";
 }
 
-char[][] explode(char[] delim, char[] str, int length = 0x7FFFFFFF) {
-	int dl = delim.length;
-
+char[][] explode(char[] delim, char[] str, int length = 0x7FFFFFFF, bool fill = false) {
 	char[][] rr;
+	char[] str2 = str;
 
-	char* s = str.ptr, se = str.ptr + str.length - dl, sp = s;
-	
-	if (length-- > 1) {
-		while (s <= se) {
-			if (s[0..dl] == delim[0..dl] || s == se) {
-				rr ~= sp[0..s - sp];
-				s += dl;
-				sp = s;
-				if (rr.length >= length) break;
-			} else {
-				s++;
+	while (true) {
+		int pos = find(str2, delim);
+		if (pos != -1) {
+			if (rr.length < length - 1) {
+				rr ~= str2[0..pos];
+				str2 = str2[pos + 1..str2.length];
+				continue;
 			}
 		}
+		
+		rr ~= str2;
+		break;
 	}
 	
-	rr ~= sp[0..se - sp + 1];
+	if (fill && length < 100) while (rr.length < length) rr ~= "";
 	
 	return rr;
 }

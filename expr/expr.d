@@ -26,6 +26,7 @@ struct Value {
 
 	int opCmp(real   v) { return cast(int)(f - v); }
 	
+	long i() { return cast(long)f; }
 	real f() { return is_str ? std.conv.toReal(_s) : _f; }
 	alias toString s;
 	
@@ -68,13 +69,15 @@ class Expression {
 				break;
 			}
 		}
-		return (r / decimal) + (cast(real)(r % decimal) / cast(real)decimal);
+		return (cast(real)r / cast(real)decimal);
 	}
 	
 	static real number(char[] s) {
-		if (s.length > 2 && s[0..2] == "0x") return number_base(s[2..s.length], 16);
-		if (s.length > 2 && s[0..2] == "0b") return number_base(s[2..s.length], 2);
-		if (s.length > 1 && s[0   ] == '0' ) return number_base(s[1..s.length], 8);
+		if (find(s, ".") == -1) {
+			if (s.length > 2 && s[0..2] == "0x") return number_base(s[2..s.length], 16);
+			if (s.length > 2 && s[0..2] == "0b") return number_base(s[2..s.length], 2);
+			if (s.length > 1 && s[0   ] == '0' ) return number_base(s[1..s.length], 8);
+		}
 		return number_base(s, 10);
 	}
 
@@ -161,7 +164,7 @@ class Expression {
 			if (std.ctype.isspace(c)) continue;
 			
 			// keyword/number
-			if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
+			if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '.') {
 				flush(0);
 				s ~= c;
 			}
