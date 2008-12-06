@@ -1,5 +1,10 @@
 import std.string;
 
+bool starts_with(char[] a, char[] b) {
+	if (a.length < b.length) return false;
+	return a[0..b.length] == b[0..b.length];
+}
+
 char[] substr(char[] s, int from, int length = 0x7FFFFFFF) {
 	if (from < 0) from += s.length; if (from < 0 || from >= s.length) return "";
 	int to = (length < 0) ? (s.length + length) : (from + length);
