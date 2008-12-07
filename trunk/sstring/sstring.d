@@ -130,3 +130,6 @@ uint charset_to_codepage(char[] charset) {
 char[] mb_convert_encoding(char[] str, char[] to_encoding, char[] from_encoding) {
 	return mb_convert_encoding(str, charset_to_codepage(to_encoding), charset_to_codepage(from_encoding));
 }
+
+import etc.c.zlib;
+uint crc32(void[] data) { return etc.c.zlib.crc32(0, cast(ubyte *)data.ptr, data.length); }
