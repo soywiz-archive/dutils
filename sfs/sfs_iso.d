@@ -348,7 +348,7 @@ class CSOStream : Stream {
 		}
 	}
 	
-	static void create(Stream sin, Stream sout, int level = 9) {
+	static void create(Stream sin, Stream sout, int level = 9, void delegate(long pos, long max) callback = null) {
 		sin.position = 0;
 		Header h;
 		h.magic[0..4] = cast(ubyte[])"CISO";
@@ -374,6 +374,7 @@ class CSOStream : Stream {
 		
 		long n = 0;
 		for (; n < plist.length - 1; n++) {
+			if (callback !is null) callback(n, plist.length);
 			int readed = sin.read(buf);
 			assert (readed == buf.length);
 
