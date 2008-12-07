@@ -66,3 +66,29 @@ version (UNIT_TEST) {
 		writefln("'%s'", trim("     hola, esto es una prueba"));
 	}
 }
+
+
+// SJIS
+
+// http://msdn.microsoft.com/en-us/library/ms776413(VS.85).aspx
+// http://msdn.microsoft.com/en-us/library/ms776446(VS.85).aspx
+// http://www.microsoft.com/globaldev/reference/dbcs/932.mspx
+
+extern(Windows) int MultiByteToWideChar(uint CodePage, uint dwFlags, char* lpMultiByteStr, int cbMultiByte, wchar* lpWideCharStr, int cchWideChar);
+
+wchar[] sjis_convert_utf16(char[] data, int codepage = 932) {
+	wchar[] out_data = new wchar[data.length  * 2];
+	int len = MultiByteToWideChar(
+		codepage,
+		0,
+		data.ptr,
+		data.length,
+		out_data.ptr,
+		out_data.length
+	);
+	return out_data[0..len];
+}
+
+char[] sjis_convert_utf8(char[] data, int codepage = 932) {
+	return std.utf.toUTF8(sjis_convert_utf16(data, codepage));
+}
