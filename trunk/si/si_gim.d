@@ -8,38 +8,37 @@ import std.intrinsic;
 import std.path;
 import std.file;
 import std.process;
-
-//debug = gim_stream;
-
-uint c565_16_32(ushort c) {
-	RGBA cc;
-
-	cc.r = ((((cast(uint)c) >>  0) & 0b00011111) * 255) / 0b00011111;
-	cc.g = ((((cast(uint)c) >>  5) & 0b00111111) * 255) / 0b00111111;
-	cc.b = ((((cast(uint)c) >> 11) & 0b00011111) * 255) / 0b00011111;
-	cc.a = 0xFF;
-	
-	return cc.v;
-}
-
-ushort c565_32_16(uint c) {
-	RGBA cc; cc.v = c;
-
-	return (
-		((((cc.r * 0b00011111) / 255) & 0b00011111) <<  0) |
-		((((cc.g * 0b00111111) / 255) & 0b00111111) <<  5) |
-		((((cc.b * 0b00011111) / 255) & 0b00011111) << 11) |
-	0);
-}
+import std.system;
 
 align(1) struct GIM_IHeader {
 	uint _u1;
 	ushort type; ushort _u2;
-	ushort width; ushort height;
+	ushort width, height;
 	ushort bpp;
-	ushort xbs; ushort ybs;
+	ushort xbs, ybs;
 
 	ushort[0x17] _u5;
+	
+	static GIM_IHeader read(Stream s, Endian endian = Endian.LittleEndian) {
+		GIM_IHeader header;
+		s.read(TA(header));
+		
+		cendian(header._u1, endian);
+		cendian(header.type, endian);
+		cendian(header._u2, endian);
+		cendian(header.width, endian);
+		cendian(header.height, endian);
+		cendian(header.bpp, endian);
+		cendian(header.xbs, endian);
+		cendian(header.ybs, endian);
+		for (int n = 0; n < _u5.length; n++) cendian(header._u5[n], endian);
+		
+		foreach (v; header._u5) {
+			//writefln("v:%d", v);
+		}
+		
+		return header;
+	}
 }
 
 class GIM_Image : Image {
@@ -47,6 +46,7 @@ class GIM_Image : Image {
 	GIM_IHeader header;
 	GIM_Image clut;
 	uint[] data;
+	Endian endian;
 
 	ubyte bpp() { return header.bpp; }
 	int width() { return header.width; }
@@ -70,15 +70,12 @@ class GIM_Image : Image {
 	}
 
 	RGBA color(int idx, RGBA c) {
-		if (clut !is null) {
-			clut.set(idx, 0, c.v);
-		}
-
+		if (clut !is null) clut.set(idx, 0, c.v);
 		return c;
 	}
 
-	void readHeader(Stream s) {
-		s.read(TA(header));
+	void readHeader(Stream s, Endian endian = Endian.LittleEndian) {
+		header = GIM_IHeader.read(s, endian);
 		data = new uint[header.width * header.height];
 	}
 
@@ -115,10 +112,8 @@ class GIM_Image : Image {
 			case 16: {
 				ushort[] d2 = cast(ushort[])data;
 				for (int y = 0, n = 0; y < header.ybs; y++) for (int x = 0; x < header.xbs; x++, n++) {
-					if (read) d2[n] = c565_32_16(get(sx + x, sy + y));
-					else {
-						set(sx + x, sy + y, c565_16_32(d2[n]));
-					}
+					if (read) d2[n] = get32(sx + x, sy + y).decode(RGBA_5650);
+					else set32(sx + x, sy + y, RGBA(RGBA_5650, d2[n]));
 				}
 			} break;
 			case 8: {
@@ -177,12 +172,15 @@ class GIM_Image : Image {
 class ImageFileFormat_GIM : ImageFileFormat {
 	override char[] identifier() { return "gim"; }
 
-	void[] header = "MIG.00.1PSP\0\0\0\0\0";
+	char[] header_le = "MIG.00.1PSP\0\0\0\0\0";
+	char[] header_be = ".GIM1.00\0PSP\0\0\0\0";
+	Endian endian;
 
 	Image[] imgs;
 
 	void processStream(Stream s, int level = 0) {
-		uint type, len, unk1, unk2;
+		ushort unk0, type;
+		uint len, unk1, unk2;
 		Stream cs;
 
 		debug(gim_stream) { char[] pad; for (int n = 0; n < level; n++) pad ~= " "; }
@@ -193,9 +191,16 @@ class ImageFileFormat_GIM : ImageFileFormat {
 			int start = s.position;
 
 			s.read(type);
+			s.read(unk0);
 			s.read(len);
 			s.read(unk1);
 			s.read(unk2);
+			
+			cendian(type, endian);
+			cendian(len, endian);
+			cendian(unk1, endian);
+			cendian(unk2, endian);
+
 			cs = new SliceStream(s, start + 0x10, start + len);
 
 			debug(gim_stream) writefln(pad ~ "type: %04X (%04X)", type, len);
@@ -212,7 +217,7 @@ class ImageFileFormat_GIM : ImageFileFormat {
 				{
 					// 0x40 bytes header
 					GIM_Image i = new GIM_Image;
-					i.readHeader(cs);
+					i.readHeader(cs, endian);
 
 					//writefln("POS: %08X", cs.position);
 
@@ -237,8 +242,9 @@ class ImageFileFormat_GIM : ImageFileFormat {
 					i.read();
 
 					if (type == 0x04) img = i; else clut = i;
-				}
+				} break;
 				case 0xFF: // Comments
+					writefln(cs.size);
 				break;
 				default:
 				//throw(new Exception(std.string.format("Invalid GIM unknown chunk type:%04X", type)));
@@ -277,9 +283,10 @@ class ImageFileFormat_GIM : ImageFileFormat {
 	}
 
 	override int check(Stream s) {
-		ubyte[] cheader; cheader.length = header.length;
-		s.read(cast(ubyte[])cheader);
-		return (cheader == header) ? 10 : 0;
+		auto cheader = s.readString(0x10);
+		if (cheader == header_be) { endian = Endian.BigEndian   ; return 10; }
+		if (cheader == header_le) { endian = Endian.LittleEndian; return 10; }
+		return 0;
 	}
 }
 
