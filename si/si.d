@@ -8,27 +8,65 @@ public import
 	std.math,
 	std.file,
 	std.process,
-	std.string
+	std.string,
+	std.system
 ;
 
 int imin(int a, int b) { return (a < b) ? a : b; }
 int imax(int a, int b) { return (a > b) ? a : b; }
 int iabs(int a) { return (a < 0) ? -a : a; }
 
+void cendian(ref ushort v, Endian endian) { if (endian != std.system.endian) v = (bswap(v) >> 16); }
+void cendian(ref uint   v, Endian endian) { if (endian != std.system.endian) v = bswap(v); }
+
 template TA(T) { ubyte[] TA(inout T t) { return cast(ubyte[])(&t)[0..1]; } }
 
 class Bit {
-	final static uint MASK(ubyte size) {
+	final static ulong MASK(ubyte size) {
 		return ((1 << size) - 1);
 	}
 	
-	final static uint INS(uint v, ubyte pos, ubyte size, int iv) {
-		uint mask = MASK(size);
+	final static ulong INS(ulong v, ubyte pos, ubyte size, int iv) {
+		ulong mask = MASK(size);
 		return (v & ~(mask << pos)) | ((iv & mask) << pos);
 	}
 	
-	final static uint EXT(uint v, ubyte pos, ubyte size) {
+	final static ulong EXT(ulong v, ubyte pos, ubyte size) {
 		return (v >> pos) & MASK(size);
+	}
+	
+	static long div_mult_ceil (long v, long mult, long div) { return cast(long)std.math.ceil (cast(real)(v * mult) / cast(real)div); }
+	static long div_mult_round(long v, long mult, long div) { return cast(long)std.math.round(cast(real)(v * mult) / cast(real)div); }
+	static long div_mult_floor(long v, long mult, long div) { return (v * mult) / div; }
+	alias div_mult_floor div_mult;
+
+	//////////////////////////
+
+	final static ulong INS2(ulong v, ubyte pos, ubyte size, int iv, int base) {
+		ulong mask = MASK(size);
+
+		/*
+		writefln("%d", iv);
+		writefln("%d", mask);
+		writefln("%d", base);
+		writefln("--------");
+		*/
+	
+		return INS(v, pos, size, div_mult_ceil(iv, mask, base));
+	}
+
+	final static ulong EXT2(ulong v, ubyte pos, ubyte size, int base) {
+		ulong mask = MASK(size);
+		if (mask == 0) return 0;
+		
+		/*
+		writefln("%d", EXT(v, pos, size));
+		writefln("%d", base);
+		writefln("%d", mask);
+		writefln("--------");
+		*/
+		
+		return div_mult_ceil(EXT(v, pos, size), base, mask);
 	}
 }
 
@@ -95,6 +133,20 @@ abstract class ImageFileFormat {
 	int check(Stream s) { return 0; }
 }
 
+align(1) struct ColorFormat {
+	align(1) struct Set {
+		union {
+			struct { ubyte r, g, b, a; }
+			ubyte[4] vv;
+		}
+	}
+	Set pos, len;
+}
+
+ColorFormat RGBA_8888 = { {0, 8, 16, 24}, {8, 8, 8, 8} };
+ColorFormat RGBA_5551 = { {0, 5, 10, 15}, {5, 5, 5, 1} };
+ColorFormat RGBA_5650 = { {0, 5, 11, 26}, {5, 6, 5, 0} };
+
 // TrueColor pixel
 align(1) struct RGBA {
 	union {
@@ -102,6 +154,22 @@ align(1) struct RGBA {
 		struct { byte _r; byte _g; byte _b; byte _a; }
 		ubyte[4] vv;
 		uint v;
+		alias r R;
+		alias g G;
+		alias b B;
+		alias a A;
+	}
+	
+	ulong decode(ColorFormat format) {
+		ulong rr;
+		for (int n = 0; n < 4; n++) rr = Bit.INS2(rr, format.pos.vv[n], format.len.vv[n], vv[n], 0xFF);
+		return rr;
+	}
+	
+	static RGBA opCall(ColorFormat format, ulong data) {
+		RGBA c = void;
+		for (int n = 0; n < 4; n++) c.vv[n] = Bit.EXT2(data, format.pos.vv[n], format.len.vv[n], 0xFF);
+		return c;
 	}
 	
 	static RGBA opCall(ubyte r, ubyte g, ubyte b, ubyte a = 0xFF) {
@@ -134,6 +202,10 @@ align(1) struct RGBA {
 			abs(a._b - b._b) +
 			abs(a._a - b._a) +
 		0);
+	}
+	
+	char[] toString() {
+		return std.string.format("RGBA(%02X,%02X,%02X,%02X)", r, g, b, a);
 	}
 }
 
