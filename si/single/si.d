@@ -8,28 +8,67 @@ public import std.math;
 public import std.file;
 public import std.process;
 public import std.string;
-public import std.zlib;
 public import std.system;
+public import std.zlib;
 
 
 int imin(int a, int b) { return (a < b) ? a : b; }
 int imax(int a, int b) { return (a > b) ? a : b; }
 int iabs(int a) { return (a < 0) ? -a : a; }
 
-template TA(T) { ubyte[] TA(inout T t) { return cast(ubyte[])(&t)[0..1]; } }
+void cendian(ref ushort v, Endian endian) { if (endian != std.system.endian) v = (bswap(v) >> 16); }
+void cendian(ref uint   v, Endian endian) { if (endian != std.system.endian) v = bswap(v); }
+
+template TA(T) { ubyte[] TA(ref T t) { return cast(ubyte[])(&t)[0..1]; } }
+
+template swap(T) { void swap(ref T t1, ref T t2) { T t = t1; t1 = t2; t2 = t;} }
 
 class Bit {
-	final static uint MASK(ubyte size) {
+	final static ulong MASK(ubyte size) {
 		return ((1 << size) - 1);
 	}
 	
-	final static uint INS(uint v, ubyte pos, ubyte size, int iv) {
-		uint mask = MASK(size);
+	final static ulong INS(ulong v, ubyte pos, ubyte size, int iv) {
+		ulong mask = MASK(size);
 		return (v & ~(mask << pos)) | ((iv & mask) << pos);
 	}
 	
-	final static uint EXT(uint v, ubyte pos, ubyte size) {
+	final static ulong EXT(ulong v, ubyte pos, ubyte size) {
 		return (v >> pos) & MASK(size);
+	}
+	
+	static long div_mult_ceil (long v, long mult, long div) { return cast(long)std.math.ceil (cast(real)(v * mult) / cast(real)div); }
+	static long div_mult_round(long v, long mult, long div) { return cast(long)std.math.round(cast(real)(v * mult) / cast(real)div); }
+	static long div_mult_floor(long v, long mult, long div) { return (v * mult) / div; }
+	alias div_mult_floor div_mult;
+
+	//////////////////////////
+
+	final static ulong INS2(ulong v, ubyte pos, ubyte size, int iv, int base) {
+		ulong mask = MASK(size);
+
+		/*
+		writefln("%d", iv);
+		writefln("%d", mask);
+		writefln("%d", base);
+		writefln("--------");
+		*/
+	
+		return INS(v, pos, size, div_mult_ceil(iv, mask, base));
+	}
+
+	final static ulong EXT2(ulong v, ubyte pos, ubyte size, int base) {
+		ulong mask = MASK(size);
+		if (mask == 0) return 0;
+		
+		/*
+		writefln("%d", EXT(v, pos, size));
+		writefln("%d", base);
+		writefln("%d", mask);
+		writefln("--------");
+		*/
+		
+		return div_mult_ceil(EXT(v, pos, size), base, mask);
 	}
 }
 
@@ -96,6 +135,20 @@ abstract class ImageFileFormat {
 	int check(Stream s) { return 0; }
 }
 
+align(1) struct ColorFormat {
+	align(1) struct Set {
+		union {
+			struct { ubyte r, g, b, a; }
+			ubyte[4] vv;
+		}
+	}
+	Set pos, len;
+}
+
+ColorFormat RGBA_8888 = { {0, 8, 16, 24}, {8, 8, 8, 8} };
+ColorFormat RGBA_5551 = { {0, 5, 10, 15}, {5, 5, 5, 1} };
+ColorFormat RGBA_5650 = { {0, 5, 11, 26}, {5, 6, 5, 0} };
+
 // TrueColor pixel
 align(1) struct RGBA {
 	union {
@@ -103,6 +156,22 @@ align(1) struct RGBA {
 		struct { byte _r; byte _g; byte _b; byte _a; }
 		ubyte[4] vv;
 		uint v;
+		alias r R;
+		alias g G;
+		alias b B;
+		alias a A;
+	}
+	
+	ulong decode(ColorFormat format) {
+		ulong rr;
+		for (int n = 0; n < 4; n++) rr = Bit.INS2(rr, format.pos.vv[n], format.len.vv[n], vv[n], 0xFF);
+		return rr;
+	}
+	
+	static RGBA opCall(ColorFormat format, ulong data) {
+		RGBA c = void;
+		for (int n = 0; n < 4; n++) c.vv[n] = Bit.EXT2(data, format.pos.vv[n], format.len.vv[n], 0xFF);
+		return c;
 	}
 	
 	static RGBA opCall(ubyte r, ubyte g, ubyte b, ubyte a = 0xFF) {
@@ -135,6 +204,10 @@ align(1) struct RGBA {
 			abs(a._b - b._b) +
 			abs(a._a - b._a) +
 		0);
+	}
+	
+	char[] toString() {
+		return std.string.format("RGBA(%02X,%02X,%02X,%02X)", r, g, b, a);
 	}
 }
 
@@ -196,9 +269,7 @@ abstract class Image {
 		);
 	}
 
-	RGBA[] createPalette(int count) {
-		throw(new Exception("Not implemented: createPalette"));
-	}
+	RGBA[] createPalette(int count = 0x100) { throw(new Exception("Not implemented: createPalette")); }
 
 	uint matchColor(RGBA c) {
 		uint mdist = 0xFFFFFFFF;
@@ -279,13 +350,141 @@ abstract class Image {
 class Bitmap32 : Image {
 	RGBA[] data;
 	int _width, _height;
+	bool using_chroma = false;
+	RGBA chroma;
 
 	ubyte bpp() { return 32; }
 	int width() { return _width; }
 	int height() { return _height; }
 
 	void set(int x, int y, uint v) { data[y * _width + x].v = v; }
-	uint get(int x, int y) { return data[y * _width + x].v; }
+	uint get(int x, int y) {
+		uint c = data[y * _width + x].v;
+		if (using_chroma && chroma.v == c) return RGBA(0, 0, 0, 0).v;
+		return c;
+	}
+	
+	alias createPalette1 createPalette;
+	
+	RGBA[] createPalette1(int count = 0x100) {
+		RGBA[] r;
+	
+		int[RGBA] colors;
+		RGBA[][int] colors_pos;
+		foreach (c; data) {
+			if (c in colors) colors[c]++;
+			else colors[c] = 1;
+		}
+		colors = colors.rehash;
+		
+		colors_pos = null;
+		foreach (c, n; colors) colors_pos[n] ~= c;
+		
+		int[] lengths = colors_pos.keys.sort.reverse;
+		
+		foreach (cc_count; lengths) {
+			//writefln(cc_count);
+			foreach (cc; colors_pos[cc_count]) {
+				//writefln(cc);
+				r ~= cc;
+				if (r.length >= count) break;
+			}
+			if (r.length >= count) break;
+		}
+		
+		return r;
+	}
+	
+	RGBA[] createPalette2(int count = 0x100) {
+		RGBA[] r;
+		bool[] fixed;
+		long[] scores;
+	
+		int[RGBA] colors;
+		RGBA[][int] colors_pos;
+		foreach (c; data) {
+			if (c in colors) colors[c]++;
+			else colors[c] = 1;
+		}
+		colors = colors.rehash;
+		
+		colors_pos = null;
+		foreach (c, n; colors) {
+			colors_pos[n] ~= c;
+		}
+		
+		if (1 in colors_pos) {
+			//if (colors.length - colors_pos[1].length > 256) {
+			if (colors.length - colors_pos[1].length > 512) {
+				colors_pos[1] = null;
+			}
+		}
+		
+		foreach (cc_count; colors_pos.keys.sort.reverse) foreach (cc; colors_pos[cc_count]) { r ~= cc; scores ~= cc_count; fixed ~= false; }
+		
+		for (int n = 0; n < count; n++) {
+			if (fixed[n]) continue;
+			uint lower_value = 0xFFFFFFFF, higher_value = 0x00000000;
+			int lower_index = -1, higher_index = -1;
+		
+			for (int m = n + 1; m < count; m++) {
+				if (fixed[m]) continue;
+				uint c_dist = colorDist(r[n], r[m]);
+				if (c_dist <= lower_value) {
+					lower_value = c_dist;
+					lower_index = m;
+				}
+			}
+			
+			for (int m = count; m < r.length; m++) {
+				if (fixed[m]) continue;
+				uint c_dist = colorDist(r[n], r[m]);
+				if (c_dist >= higher_value) {
+					higher_value = c_dist;
+					higher_index = m;
+				}
+			}
+			
+			if (higher_index != -1 && lower_index != -1) {
+				swap(r[lower_index], r[higher_index]);
+				fixed[lower_index] = true;
+			}
+
+			writefln("%d, %d", lower_value, lower_index);
+			
+			//break;
+		}
+		
+		writefln(r.length);
+		
+		/*
+		for (int n = 0; n < r.length; n++) {
+			writefln("%s: %d", r[n], scores[n]);
+		}
+		*/
+		
+		return r[0..count];
+	}
+	
+	Bitmap8 paletize(int ncolors = 0x100) {
+		int[RGBA] colors;
+		
+		auto r = new Bitmap8(width, height);
+		
+		r.palette = createPalette(ncolors);
+		
+		foreach (c; data) colors[c] = 0;
+		foreach (c; colors.keys) colors[c] = r.matchColor(c);
+		
+		for (int y = 0; y < _height; y++) for (int x = 0; x < _width; x++) r.set(x, y, colors[get32(x, y)]);
+		
+		return r;
+	}
+	
+	override void setChroma(RGBA c) {
+		using_chroma = true;
+		chroma = c;
+	}
 
 	this(int w, int h) {
 		_width = w;
@@ -312,10 +511,7 @@ class Bitmap8 : Image {
 
 	void set(int x, int y, uint v) { data[y * _width + x] = v; }
 	uint get(int x, int y) { return data[y * _width + x]; }
-
-	override RGBA get32(int x, int y) {
-		return palette[get(x, y) % palette.length];		
-	}
+	override RGBA get32(int x, int y) { return palette[get(x, y) % palette.length];		 }
 	
 	override int ncolor() { return palette.length;}
 	override int ncolor(int s) { palette.length = s; return s; }
@@ -323,11 +519,9 @@ class Bitmap8 : Image {
 	RGBA color(int idx, RGBA col) { return palette[idx] = col; }
 	void colorSwap(int i1, int i2) {
 		if (i1 >= palette.length || i2 >= palette.length) return;
-		RGBA ct = palette[i1];
-		palette[i1] = palette[i2];
-		palette[i2] = ct;
+		swap(palette[i1], palette[i2]);
 	}
-
+	
 	this(int w, int h) {
 		_width = w;
 		_height = h;
@@ -435,37 +629,35 @@ static this() {
 }
 
 
-//debug = gim_stream;
-
-uint c565_16_32(ushort c) {
-	RGBA cc;
-
-	cc.r = ((((cast(uint)c) >>  0) & 0b00011111) * 255) / 0b00011111;
-	cc.g = ((((cast(uint)c) >>  5) & 0b00111111) * 255) / 0b00111111;
-	cc.b = ((((cast(uint)c) >> 11) & 0b00011111) * 255) / 0b00011111;
-	cc.a = 0xFF;
-	
-	return cc.v;
-}
-
-ushort c565_32_16(uint c) {
-	RGBA cc; cc.v = c;
-
-	return (
-		((((cc.r * 0b00011111) / 255) & 0b00011111) <<  0) |
-		((((cc.g * 0b00111111) / 255) & 0b00111111) <<  5) |
-		((((cc.b * 0b00011111) / 255) & 0b00011111) << 11) |
-	0);
-}
-
 align(1) struct GIM_IHeader {
 	uint _u1;
 	ushort type; ushort _u2;
-	ushort width; ushort height;
+	ushort width, height;
 	ushort bpp;
-	ushort xbs; ushort ybs;
+	ushort xbs, ybs;
 
 	ushort[0x17] _u5;
+	
+	static GIM_IHeader read(Stream s, Endian endian = Endian.LittleEndian) {
+		GIM_IHeader header;
+		s.read(TA(header));
+		
+		cendian(header._u1, endian);
+		cendian(header.type, endian);
+		cendian(header._u2, endian);
+		cendian(header.width, endian);
+		cendian(header.height, endian);
+		cendian(header.bpp, endian);
+		cendian(header.xbs, endian);
+		cendian(header.ybs, endian);
+		for (int n = 0; n < _u5.length; n++) cendian(header._u5[n], endian);
+		
+		foreach (v; header._u5) {
+			//writefln("v:%d", v);
+		}
+		
+		return header;
+	}
 }
 
 class GIM_Image : Image {
@@ -473,6 +665,7 @@ class GIM_Image : Image {
 	GIM_IHeader header;
 	GIM_Image clut;
 	uint[] data;
+	Endian endian;
 
 	ubyte bpp() { return header.bpp; }
 	int width() { return header.width; }
@@ -496,15 +689,12 @@ class GIM_Image : Image {
 	}
 
 	RGBA color(int idx, RGBA c) {
-		if (clut !is null) {
-			clut.set(idx, 0, c.v);
-		}
-
+		if (clut !is null) clut.set(idx, 0, c.v);
 		return c;
 	}
 
-	void readHeader(Stream s) {
-		s.read(TA(header));
+	void readHeader(Stream s, Endian endian = Endian.LittleEndian) {
+		header = GIM_IHeader.read(s, endian);
 		data = new uint[header.width * header.height];
 	}
 
@@ -541,10 +731,8 @@ class GIM_Image : Image {
 			case 16: {
 				ushort[] d2 = cast(ushort[])data;
 				for (int y = 0, n = 0; y < header.ybs; y++) for (int x = 0; x < header.xbs; x++, n++) {
-					if (read) d2[n] = c565_32_16(get(sx + x, sy + y));
-					else {
-						set(sx + x, sy + y, c565_16_32(d2[n]));
-					}
+					if (read) d2[n] = get32(sx + x, sy + y).decode(RGBA_5650);
+					else set32(sx + x, sy + y, RGBA(RGBA_5650, d2[n]));
 				}
 			} break;
 			case 8: {
@@ -603,12 +791,15 @@ class GIM_Image : Image {
 class ImageFileFormat_GIM : ImageFileFormat {
 	override char[] identifier() { return "gim"; }
 
-	void[] header = "MIG.00.1PSP\0\0\0\0\0";
+	char[] header_le = "MIG.00.1PSP\0\0\0\0\0";
+	char[] header_be = ".GIM1.00\0PSP\0\0\0\0";
+	Endian endian;
 
 	Image[] imgs;
 
 	void processStream(Stream s, int level = 0) {
-		uint type, len, unk1, unk2;
+		ushort unk0, type;
+		uint len, unk1, unk2;
 		Stream cs;
 
 		debug(gim_stream) { char[] pad; for (int n = 0; n < level; n++) pad ~= " "; }
@@ -619,9 +810,16 @@ class ImageFileFormat_GIM : ImageFileFormat {
 			int start = s.position;
 
 			s.read(type);
+			s.read(unk0);
 			s.read(len);
 			s.read(unk1);
 			s.read(unk2);
+			
+			cendian(type, endian);
+			cendian(len, endian);
+			cendian(unk1, endian);
+			cendian(unk2, endian);
+
 			cs = new SliceStream(s, start + 0x10, start + len);
 
 			debug(gim_stream) writefln(pad ~ "type: %04X (%04X)", type, len);
@@ -638,7 +836,7 @@ class ImageFileFormat_GIM : ImageFileFormat {
 				{
 					// 0x40 bytes header
 					GIM_Image i = new GIM_Image;
-					i.readHeader(cs);
+					i.readHeader(cs, endian);
 
 					//writefln("POS: %08X", cs.position);
 
@@ -663,8 +861,9 @@ class ImageFileFormat_GIM : ImageFileFormat {
 					i.read();
 
 					if (type == 0x04) img = i; else clut = i;
-				}
+				} break;
 				case 0xFF: // Comments
+					writefln(cs.size);
 				break;
 				default:
 				//throw(new Exception(std.string.format("Invalid GIM unknown chunk type:%04X", type)));
@@ -703,9 +902,10 @@ class ImageFileFormat_GIM : ImageFileFormat {
 	}
 
 	override int check(Stream s) {
-		ubyte[] cheader; cheader.length = header.length;
-		s.read(cast(ubyte[])cheader);
-		return (cheader == header) ? 10 : 0;
+		auto cheader = s.readString(0x10);
+		if (cheader == header_be) { endian = Endian.BigEndian   ; return 10; }
+		if (cheader == header_le) { endian = Endian.LittleEndian; return 10; }
+		return 0;
 	}
 }
 
