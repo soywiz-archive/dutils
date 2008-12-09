@@ -110,7 +110,7 @@ class ZipEntry : FS_Entry {
 			}
 			if (set) uncomp_stream = new MemoryStream(uncomp_data);
 		}
-		if (uncomp_stream) return uncomp_stream;
+		if (uncomp_stream) return new SliceStream(uncomp_stream, 0);
 		throw(new Exception(std.string.format("Unknown method 0x%04X for file '%s'", lfh.method, path)));
 	}
 }
