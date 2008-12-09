@@ -19,7 +19,9 @@ int iabs(int a) { return (a < 0) ? -a : a; }
 void cendian(ref ushort v, Endian endian) { if (endian != std.system.endian) v = (bswap(v) >> 16); }
 void cendian(ref uint   v, Endian endian) { if (endian != std.system.endian) v = bswap(v); }
 
-template TA(T) { ubyte[] TA(inout T t) { return cast(ubyte[])(&t)[0..1]; } }
+template TA(T) { ubyte[] TA(ref T t) { return cast(ubyte[])(&t)[0..1]; } }
+
+template swap(T) { void swap(ref T t1, ref T t2) { T t = t1; t1 = t2; t2 = t;} }
 
 class Bit {
 	final static ulong MASK(ubyte size) {
@@ -267,9 +269,7 @@ abstract class Image {
 		);
 	}
 
-	RGBA[] createPalette(int count) {
-		throw(new Exception("Not implemented: createPalette"));
-	}
+	RGBA[] createPalette(int count = 0x100) { throw(new Exception("Not implemented: createPalette")); }
 
 	uint matchColor(RGBA c) {
 		uint mdist = 0xFFFFFFFF;
@@ -350,13 +350,141 @@ abstract class Image {
 class Bitmap32 : Image {
 	RGBA[] data;
 	int _width, _height;
+	bool using_chroma = false;
+	RGBA chroma;
 
 	ubyte bpp() { return 32; }
 	int width() { return _width; }
 	int height() { return _height; }
 
 	void set(int x, int y, uint v) { data[y * _width + x].v = v; }
-	uint get(int x, int y) { return data[y * _width + x].v; }
+	uint get(int x, int y) {
+		uint c = data[y * _width + x].v;
+		if (using_chroma && chroma.v == c) return RGBA(0, 0, 0, 0).v;
+		return c;
+	}
+	
+	alias createPalette1 createPalette;
+	
+	RGBA[] createPalette1(int count = 0x100) {
+		RGBA[] r;
+	
+		int[RGBA] colors;
+		RGBA[][int] colors_pos;
+		foreach (c; data) {
+			if (c in colors) colors[c]++;
+			else colors[c] = 1;
+		}
+		colors = colors.rehash;
+		
+		colors_pos = null;
+		foreach (c, n; colors) colors_pos[n] ~= c;
+		
+		int[] lengths = colors_pos.keys.sort.reverse;
+		
+		foreach (cc_count; lengths) {
+			//writefln(cc_count);
+			foreach (cc; colors_pos[cc_count]) {
+				//writefln(cc);
+				r ~= cc;
+				if (r.length >= count) break;
+			}
+			if (r.length >= count) break;
+		}
+		
+		return r;
+	}
+	
+	RGBA[] createPalette2(int count = 0x100) {
+		RGBA[] r;
+		bool[] fixed;
+		long[] scores;
+	
+		int[RGBA] colors;
+		RGBA[][int] colors_pos;
+		foreach (c; data) {
+			if (c in colors) colors[c]++;
+			else colors[c] = 1;
+		}
+		colors = colors.rehash;
+		
+		colors_pos = null;
+		foreach (c, n; colors) {
+			colors_pos[n] ~= c;
+		}
+		
+		if (1 in colors_pos) {
+			//if (colors.length - colors_pos[1].length > 256) {
+			if (colors.length - colors_pos[1].length > 512) {
+				colors_pos[1] = null;
+			}
+		}
+		
+		foreach (cc_count; colors_pos.keys.sort.reverse) foreach (cc; colors_pos[cc_count]) { r ~= cc; scores ~= cc_count; fixed ~= false; }
+		
+		for (int n = 0; n < count; n++) {
+			if (fixed[n]) continue;
+			uint lower_value = 0xFFFFFFFF, higher_value = 0x00000000;
+			int lower_index = -1, higher_index = -1;
+		
+			for (int m = n + 1; m < count; m++) {
+				if (fixed[m]) continue;
+				uint c_dist = colorDist(r[n], r[m]);
+				if (c_dist <= lower_value) {
+					lower_value = c_dist;
+					lower_index = m;
+				}
+			}
+			
+			for (int m = count; m < r.length; m++) {
+				if (fixed[m]) continue;
+				uint c_dist = colorDist(r[n], r[m]);
+				if (c_dist >= higher_value) {
+					higher_value = c_dist;
+					higher_index = m;
+				}
+			}
+			
+			if (higher_index != -1 && lower_index != -1) {
+				swap(r[lower_index], r[higher_index]);
+				fixed[lower_index] = true;
+			}
+
+			writefln("%d, %d", lower_value, lower_index);
+			
+			//break;
+		}
+		
+		writefln(r.length);
+		
+		/*
+		for (int n = 0; n < r.length; n++) {
+			writefln("%s: %d", r[n], scores[n]);
+		}
+		*/
+		
+		return r[0..count];
+	}
+	
+	Bitmap8 paletize(int ncolors = 0x100) {
+		int[RGBA] colors;
+		
+		auto r = new Bitmap8(width, height);
+		
+		r.palette = createPalette(ncolors);
+		
+		foreach (c; data) colors[c] = 0;
+		foreach (c; colors.keys) colors[c] = r.matchColor(c);
+		
+		for (int y = 0; y < _height; y++) for (int x = 0; x < _width; x++) r.set(x, y, colors[get32(x, y)]);
+		
+		return r;
+	}
+	
+	override void setChroma(RGBA c) {
+		using_chroma = true;
+		chroma = c;
+	}
 
 	this(int w, int h) {
 		_width = w;
@@ -383,10 +511,7 @@ class Bitmap8 : Image {
 
 	void set(int x, int y, uint v) { data[y * _width + x] = v; }
 	uint get(int x, int y) { return data[y * _width + x]; }
-
-	override RGBA get32(int x, int y) {
-		return palette[get(x, y) % palette.length];		
-	}
+	override RGBA get32(int x, int y) { return palette[get(x, y) % palette.length];		 }
 	
 	override int ncolor() { return palette.length;}
 	override int ncolor(int s) { palette.length = s; return s; }
@@ -394,11 +519,9 @@ class Bitmap8 : Image {
 	RGBA color(int idx, RGBA col) { return palette[idx] = col; }
 	void colorSwap(int i1, int i2) {
 		if (i1 >= palette.length || i2 >= palette.length) return;
-		RGBA ct = palette[i1];
-		palette[i1] = palette[i2];
-		palette[i2] = ct;
+		swap(palette[i1], palette[i2]);
 	}
-
+	
 	this(int w, int h) {
 		_width = w;
 		_height = h;
