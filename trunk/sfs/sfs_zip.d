@@ -1,7 +1,20 @@
 import sfs;
 
 import std.string, std.stdio, std.stream, std.path, std.file;
+import std.date;
 import std.zlib;
+
+align(1) struct DOSTIMEDATE {
+	union {
+		struct { ushort file_time, file_date; }
+		DosFileTime time;
+	}
+	
+	void opAssign(d_time t) { time = toDosFileTime(t); }
+	d_time timestamp() { return toDtime(time); }
+	
+	static void opCall(d_time dtd) { DOSTIMEDATE r; r = dtd; return r; }
+}
 
 version (no_lzma) { } else {
 	import lzma;
@@ -16,8 +29,7 @@ align(1) struct LocalFileHeader {
 	ushort _version;
 	ushort flags;
 	ushort method;
-	ushort file_time;
-	ushort file_date;
+	DOSTIMEDATE time;
 	uint   crc32;
 	uint   compressed_size;
 	uint   uncompressed_size;
@@ -62,6 +74,11 @@ class ZipEntry : FS_Entry {
 	ubyte[] uncomp_data;
 	Stream uncomp_stream;
 	FS_Entry[] childs() { return cast(FS_Entry[])_childs.values; }
+	d_time time;
+	
+	d_time atime() { return time; }
+	d_time mtime() { return time; }
+	d_time ctime() { return time; }
 	
 	ZipEntry open_create_entry(char[] name) {
 		if (name in _childs) return _childs[name];
@@ -151,6 +168,7 @@ class ZipArchive : ZipEntry {
 					ze.extra = extra;
 					ze.slice = slice;
 					ze.lfh = h;
+					ze.time = h.time.timestamp;
 					
 					if (h.flags & (1 << 3)) s.seekCur(12);
 				} break;
@@ -169,8 +187,9 @@ class ZipArchive : ZipEntry {
 
 /*
 void main() {
-	auto zip = new ZipArchive("lzma.zip");
-	//auto zip = new ZipArchive("deflate.zip");
-	writefln(zip["test/prueba.txt"].read());
+	//auto zip = new ZipArchive("lzma.zip");
+	auto zip = new ZipArchive("deflate.zip");
+	writefln(toUTCString(zip["test/prueba.txt"].ctime));
+	writefln(toUTCString(zip["test/prueba.txt"].read));
 }
 */
