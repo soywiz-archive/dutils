@@ -1,0 +1,10 @@
+LIBRARY PSAPI
+DESCRIPTION 'psapi.dll'
+EXETYPE NT
+
+EXPORTS
+   _GetProcessMemoryInfo@12 = GetProcessMemoryInfo
+   _EnumProcessModules@16 = EnumProcessModules
+   _GetModuleInformation@16 = GetModuleInformation
+   _EnumProcesses@12 = EnumProcesses
+   _GetModuleBaseNameW@16 = GetModuleBaseNameW
