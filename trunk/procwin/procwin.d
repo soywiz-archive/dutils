@@ -35,6 +35,39 @@ static extern (Windows) {
 	
 	BOOL   ReadProcessMemory (HANDLE hProcess, LPCVOID lpBaseAddress, LPVOID lpBuffer, SIZE_T nSize, SIZE_T *lpNumberOfBytesRead);
 	BOOL   WriteProcessMemory(HANDLE hProcess, LPVOID lpBaseAddress, LPCVOID lpBuffer, SIZE_T nSize, SIZE_T *lpNumberOfBytesWritten);
+
+	LRESULT CallWindowProcW(WNDPROC lpPrevWndFunc, HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);	
+
+	struct STARTUPINFO {
+	  DWORD    cb = STARTUPINFO.sizeof;
+	  LPTSTR   lpReserved;
+	  LPTSTR   lpDesktop;
+	  LPTSTR   lpTitle;
+	  DWORD    dwX;
+	  DWORD    dwY;
+	  DWORD    dwXSize;
+	  DWORD    dwYSize;
+	  DWORD    dwXCountChars;
+	  DWORD    dwYCountChars;
+	  DWORD    dwFillAttribute;
+	  DWORD    dwFlags;
+	  WORD     wShowWindow;
+	  WORD     cbReserved2;
+	  LPBYTE   lpReserved2;
+	  HANDLE   hStdInput;
+	  HANDLE   hStdOutput;
+	  HANDLE   hStdError;
+	}
+
+	struct PROCESS_INFORMATION {
+	  HANDLE   hProcess;
+	  HANDLE   hThread;
+	  DWORD    dwProcessId;
+	  DWORD    dwThreadId;
+	}
+
+	BOOL CreateProcessA(LPCTSTR lpApplicationName, LPTSTR lpCommandLine, void* lpProcessAttributes, void* lpThreadAttributes, BOOL bInheritHandles, DWORD dwCreationFlags, LPVOID lpEnvironment, LPCTSTR lpCurrentDirectory, STARTUPINFO* lpStartupInfo, PROCESS_INFORMATION* lpProcessInformation);
+	
 	
 	// Process List
 	enum {
@@ -210,7 +243,7 @@ class Window {
 		return text;
 	}
 
-	wchar[] get_class() {
+	wchar[] _class() {
 		auto text = new wchar[0x1000];
 		text.length = GetClassNameW(hwnd, text.ptr, text.length);
 		return text;
@@ -226,6 +259,22 @@ class Window {
 		thread_id = GetWindowThreadProcessId(hwnd, &pid);
 		return Process.open(pid);
 	}
+	
+	static Window[] list_simple() {
+		Window[] list;
+		
+		extern (Windows) static BOOL EnumWindowsFunc(HWND hwnd, LPARAM param) {
+			auto list = cast(Window[]*)param;
+			*list ~= new Window(hwnd);
+			return true;
+		}
+		
+		EnumWindows(&EnumWindowsFunc, cast(uint)&list);
+	
+		return list;
+	}	
+	
+	alias list_simple list;
 // CreateToolhelp32Snapshot, Process32First, Process32Next, PROCESSENTRY32
 // lpPrevWndProc = SetWindowLong(gHW, GWL_WNDPROC, &WindowProc);
 // return CallWindowProc(lpPrevWndProc, hw, uMsg, wParam, lParam);	
@@ -357,20 +406,6 @@ class Process {
 		return std.string.format("Process(%d)", pid);
 	}
 	
-	static Window[] ListWindows() {
-		Window[] list;
-		
-		extern (Windows) static BOOL EnumWindowsFunc(HWND hwnd, LPARAM param) {
-			auto list = cast(Window[]*)param;
-			*list ~= new Window(hwnd);
-			return true;
-		}
-		
-		EnumWindows(&EnumWindowsFunc, cast(uint)&list);
-	
-		return list;
-	}
-	
 	void* alloc(long size) {
 		return VirtualAllocEx(handle, null, size, 0x1000 | 0x2000, 0x40);
 	}
@@ -407,7 +442,7 @@ class Process {
 		return execute(data, (cast(ubyte *)code_start)[0..code_end - code_start]);
 	}
 	
-	void inject(char[] dll) {
+	HANDLE inject(char[] dll) {
 		prepare_rw();
 		
 		HMODULE hKernel32 = GetModuleHandleA("Kernel32");
@@ -425,9 +460,9 @@ class Process {
 		
 		WindowError.wassert(cast(uint)thread);
 		
-		writefln(thread);
+		return thread;
+		//writefln(thread);
 		
-		WaitForSingleObject(thread, INFINITE);
-		
+		//WaitForSingleObject(thread, INFINITE);
 	}
 }
