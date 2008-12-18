@@ -1068,8 +1068,9 @@ class ImageFileFormat_PNG : ImageFileFormat {
 				break;
 				case "tRNS":
 					if (Bpp == 1) {
-						if (size != i.ncolor) throw(new Exception(std.string.format("Invalid Transparent Data (%d != %d)", size, i.ncolor)));
-						for (int n = 0; n < i.ncolor; n++) {
+						//if (size != i.ncolor) throw(new Exception(std.string.format("Invalid Transparent Data (%d != %d)", size, i.ncolor)));
+						//for (int n = 0; n < i.ncolor; n++) {
+						for (int n = 0; n < size; n++) {
 							RGBA c = i.color(n);
 							s.read(c.a);
 							i.color(n, c);
