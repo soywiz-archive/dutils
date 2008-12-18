@@ -149,6 +149,48 @@ ColorFormat RGBA_8888 = { {0, 8, 16, 24}, {8, 8, 8, 8} };
 ColorFormat RGBA_5551 = { {0, 5, 10, 15}, {5, 5, 5, 1} };
 ColorFormat RGBA_5650 = { {0, 5, 11, 26}, {5, 6, 5, 0} };
 
+align(1) struct RGBAf {
+	union {
+		struct { float r, g, b, a; }
+		float[4] vv;
+	}
+	
+	static ubyte clamp(float v) {
+		float r = v * 0xFF;
+		if (r > 0xFF) r = 0xFF;
+		if (r < 0x00) r = 0x00;
+		return cast(ubyte)r;
+	}
+	
+	RGBA rgba() { return RGBA(clamp(r), clamp(g), clamp(b), clamp(a)); }
+	
+	static RGBAf opCall(float r, float g, float b, float a) {
+		RGBAf c = {r, g, b, a};
+		return c;
+	}
+	
+	static RGBAf opCall(RGBA c) {
+		RGBAf cf = void;
+		for (int n = 0; n < 4; n++) cf.vv[n] = cast(float)c.vv[n] / 0xFF;
+		return cf;
+	}
+	
+	RGBAf opMul(float m) {
+		//return RGBAf(r * m, g * m, b * m, a * m);
+		return RGBAf(r * m, g * m, b * m, a);
+	}
+	
+	RGBAf opAdd(RGBAf c) {
+		RGBAf r = void;
+		for (int n = 0; n < 4; n++) r.vv[n] = vv[n] + c.vv[n];
+		return r;
+	}
+	
+	static RGBAf over(RGBAf c1, RGBAf c2) {
+		return c1 * c1.a + c2 * (c2.a * (1 - c1.a));
+	}	
+}
+
 // TrueColor pixel
 align(1) struct RGBA {
 	union {
@@ -175,11 +217,7 @@ align(1) struct RGBA {
 	}
 	
 	static RGBA opCall(ubyte r, ubyte g, ubyte b, ubyte a = 0xFF) {
-		RGBA c = void;
-		c.r = r;
-		c.g = g;
-		c.b = b;
-		c.a = a;
+		RGBA c = {r, g, b, a};
 		return c;
 	}
 	
@@ -282,6 +320,26 @@ abstract class Image {
 			}
 		}
 		return idx;
+	}
+	
+	void draw(Image i, int px = 0, int py = 0) {
+		int w = width, h = height;
+		for (int y = 0; y < h; y++) {
+			for (int x = 0; x < w; x++) {
+				if (false) {
+					RGBAf c = RGBAf(get32(x, y));
+					RGBAf c2 = RGBAf(i.get32(px + x, py + y));
+					c = RGBAf.over(c2, c);
+					//writefln("%f, %f, %f, %f", c.r, c.g, c.b, c.a);
+					i.set32(px + x, py + y, c.rgba);
+				} else {
+					RGBAf c = RGBAf(get32(x, y));
+					RGBAf c2 = RGBAf(i.get32(px + x, py + y));
+					c = c + c2;
+					i.set32(px + x, py + y, c.rgba);
+				}
+			}
+		}
 	}
 
 	void copyFrom(Image i, bool convertPalette = false) {
