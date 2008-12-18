@@ -14,3 +14,5 @@ Writing:
   * PNG
   * GIM _(updating)_
   * TM2 _(updating)_
+
+Now it supports font drawing using FreeType.
