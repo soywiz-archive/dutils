@@ -2853,12 +2853,9 @@ class Font {
 
 		foreach (c; str) {
 			FT_Glyph glyph;
-			FT_BBox box;
-			
 			int index = FT_Get_Char_Index(face, c);
 			FT_Load_Glyph(face, index, FT_LOAD_DEFAULT);
 			FT_Get_Glyph(face.glyph, &glyph);
-			//FT_Glyph_Get_CBox(glyph, 3, &box);
 			auto metrics = face.glyph.metrics;
 			
 			if (hasKerning && prev_index && index) {
@@ -2869,11 +2866,12 @@ class Font {
 			
 			int advance = FT_CEIL(metrics.horiAdvance);
 			
+			FT_BBox box;
 			box.xMin = FT_FLOOR(metrics.horiBearingX);
 			box.xMax = box.xMin + FT_CEIL(metrics.width);
 			box.yMax = FT_FLOOR(metrics.horiBearingY);
 			box.yMin = box.yMax - FT_CEIL(metrics.height);
-			//box.yoffset = font.ascent - cached.maxy;			
+			int yoffset = ascent - box.yMax;
 
 			//writefln(box.xMin);
 
@@ -2887,8 +2885,6 @@ class Font {
 
 			if (box.yMin < miny) miny = box.yMin;
 			if (box.yMax > maxy) maxy = box.yMax;
-			
-			writefln("ad:%d", advance);
 			
 			prev_index = index;
 		}
@@ -2912,12 +2908,63 @@ class Font {
 		writefln(face.glyph.bitmap.width);
 		writefln(face.glyph.bitmap.rows);
 	}
-}
+	
+	Image draw(wchar[] str, RGBA color = RGBA(0, 0, 0)) {
+		int[] ssize = size(str); ssize[1] = height;
+		auto bmp = new Bitmap32(ssize[0], ssize[1]);
+		int prev_index;
+		int x;
 
+		foreach (str_pos, c; str) {
+			FT_Glyph glyph;
+			int index = FT_Get_Char_Index(face, c);
+			FT_Load_Glyph(face, index, FT_LOAD_DEFAULT);
+			FT_Get_Glyph(face.glyph, &glyph);
+			auto metrics = face.glyph.metrics;
+			FT_BBox box;
+			box.xMin = FT_FLOOR(metrics.horiBearingX);
+			box.xMax = box.xMin + FT_CEIL(metrics.width);
+			box.yMax = FT_FLOOR(metrics.horiBearingY);
+			box.yMin = box.yMax - FT_CEIL(metrics.height);
+			int yoffset = ascent - box.yMax;
+			int advance = FT_CEIL(metrics.horiAdvance);
+			FT_Render_Glyph(face.glyph, FT_Render_Mode.FT_RENDER_MODE_NORMAL);
+			auto bitmap = face.glyph.bitmap;
+			
+			int width = face.glyph.bitmap.width;
+			if (width > box.xMax - box.xMin) width = box.xMax - box.xMin;
+			
+			if (hasKerning && prev_index && index) {
+				FT_Vector delta; 
+				FT_Get_Kerning(face, prev_index, index, 0, &delta); 
+				x += delta.x >> 6;
+			}
+
+			if (str_pos == 0 && (box.xMin < 0)) x -= box.xMin;
+			
+			for (int row = 0; row < bitmap.rows; row++) { int y = row + yoffset;
+				if (y < 0) continue;
+				if (y >= bmp.height) continue;
+				
+				ubyte* src = (bitmap.buffer + bitmap.pitch * row);
+				for (int col = 0; col < width; col++) {
+					color.a = *src++;
+					bmp.set32(x + col, y, color);
+				}
+			}
+			
+			x += advance;
+			if (style & Style.BOLD) x += glyph_overhang;
+			
+			prev_index = index;
+		}
+		
+		return bmp;
+	}
+}
 
 void main() {
 	auto font = Font.fromFile("verdana.ttf");
-	//font.get_glyph(cast(wchar)'A');
-	//writefln(font.width("hola"));
-	writefln(font.size("hola"));
+	auto bmp = font.draw("hola");
+	ImageFileFormatProvider["png"].write(bmp, "test.png");
 }
