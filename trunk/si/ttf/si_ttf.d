@@ -2727,7 +2727,7 @@ class Font {
 		ITALIC    = (1 << 1),
 		UNDERLINE = (1 << 2),	
 	}
-
+	
 	FT_Open_Args args;
 	FT_Face face;
 	
@@ -2909,7 +2909,7 @@ class Font {
 		writefln(face.glyph.bitmap.rows);
 	}
 	
-	Image draw(wchar[] str, RGBA color = RGBA(0, 0, 0)) {
+	Image render(wchar[] str, RGBA color = RGBA(0, 0, 0)) {
 		int[] ssize = size(str); ssize[1] = height;
 		auto bmp = new Bitmap32(ssize[0], ssize[1]);
 		int prev_index;
@@ -2961,4 +2961,30 @@ class Font {
 		
 		return bmp;
 	}
+
+	enum Align {
+		LEFT   = 0,
+		TOP    = 0,
+		CENTER = 1,
+		MIDDLE = 1,
+		RIGHT  = 2,
+		BOTTOM = 2,
+	}
+	
+	void blit(wchar[] text, RGBA color, int x, int y, Image dest, Align ax = Align.LEFT, Align ay = Align.TOP, RGBA color_border = RGBA(0, 0, 0), int border = 0, int shadow = 0) {
+		auto i1 = render(text, color);
+		auto i2 = render(text, color_border);
+		
+		float _ax = cast(float)(ax) / 2;
+		float _ay = cast(float)(ay) / 2;
+		
+		x -= i1.width  * _ax;
+		y -= i1.height * _ay;
+		
+		i2.blit(dest, x - 1, y    , 1);
+		i2.blit(dest, x + 1, y    , 1);
+		i2.blit(dest, x    , y - 1, 1);
+		i2.blit(dest, x    , y + 1, 1);
+		i1.blit(dest, x    , y    , 1);
+	}	
 }
