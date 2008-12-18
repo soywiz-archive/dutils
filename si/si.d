@@ -12,6 +12,24 @@ public import
 	std.system
 ;
 
+int hex(char c) {
+	if (c >= '0' && c <= '9') return (c - '0') + 0;
+	if (c >= 'a' && c <= 'f') return (c - 'a') + 10;
+	if (c >= 'A' && c <= 'F') return (c - 'A') + 10;
+	return -1;
+}
+int hex(char[] s) {
+	int r;
+	foreach (c; s) {
+		int v = hex(c);
+		if (v >= 0) {
+			r *= 0x10;
+			r += v;
+		}
+	}
+	return r;
+}
+
 int imin(int a, int b) { return (a < b) ? a : b; }
 int imax(int a, int b) { return (a > b) ? a : b; }
 int iabs(int a) { return (a < 0) ? -a : a; }
@@ -80,13 +98,15 @@ class ImageFileFormatProvider {
 	}
 
 	static ImageFileFormat find(Stream s, int check_size = 1024) {
-		auto cs = new MemoryStream();
-		cs.copyFrom(new SliceStream(s, s.position, s.position + check_size));
-	
+		auto ss = new SliceStream(s, 0);
+		auto data = new ubyte[check_size];
+		auto cs = new MemoryStream(data[0..ss.read(data)]);
+
 		ImageFileFormat cff;
 		int certain = 0;
 		foreach (iff; list.values) {
-			int c_certain = iff.check(new SliceStream(cs, 0));
+			cs.position = 0;
+			int c_certain = iff.check(cs);
 			if (c_certain > certain) {
 				cff = iff;
 				certain = c_certain;
@@ -188,6 +208,10 @@ align(1) struct RGBAf {
 	
 	static RGBAf over(RGBAf c1, RGBAf c2) {
 		return c1 * c1.a + c2 * (c2.a * (1 - c1.a));
+	}
+	
+	char[] toString() {
+		return std.string.format("RGBA(%02X,%02X,%02X,%02X)", r, g, b, a);
 	}	
 }
 
@@ -224,6 +248,12 @@ align(1) struct RGBA {
 	static RGBA opCall(uint v) {
 		RGBA c = void;
 		c.v = v;
+		return c;
+	}
+	
+	static RGBA opCall(char[] s) {
+		RGBA c;
+		for (int n = 0; n < s.length; n += 2) c.vv[n / 2] = hex(s[n..n + 2]);
 		return c;
 	}
 	
@@ -277,6 +307,18 @@ abstract class Image {
 		}
 		throw(new Exception("Not implemented (get32)"));
 	}
+	
+	Image filter(RGBA delegate(int, int, RGBA) func) {
+		int w = width, h = height;
+		for (int y = 0; y < h; y++) {
+			for (int x = 0; x < w; x++) {
+				set32(x, y, func(x, y, get32(x, y)));
+			}
+		}
+		return this;
+	}
+	
+	Image duplicate() { assert(0 != 1, "duplicate not implemented"); return null; }
 
 	RGBA getColor(int x, int y) {
 		RGBA c;
@@ -322,22 +364,16 @@ abstract class Image {
 		return idx;
 	}
 	
-	void draw(Image i, int px = 0, int py = 0) {
+	void blit(Image i, int px = 0, int py = 0, float alpha = 1.0) {
 		int w = width, h = height;
 		for (int y = 0; y < h; y++) {
 			for (int x = 0; x < w; x++) {
-				if (false) {
-					RGBAf c = RGBAf(get32(x, y));
-					RGBAf c2 = RGBAf(i.get32(px + x, py + y));
-					c = RGBAf.over(c2, c);
-					//writefln("%f, %f, %f, %f", c.r, c.g, c.b, c.a);
-					i.set32(px + x, py + y, c.rgba);
-				} else {
-					RGBAf c = RGBAf(get32(x, y));
-					RGBAf c2 = RGBAf(i.get32(px + x, py + y));
-					c = c + c2;
-					i.set32(px + x, py + y, c.rgba);
-				}
+				RGBAf c = RGBAf(get32(x, y));
+				RGBAf c2 = RGBAf(i.get32(px + x, py + y));
+				c.a *= alpha;
+				c = RGBAf.over(c, c2);
+				//writefln("%f, %f, %f, %f", c.r, c.g, c.b, c.a);
+				i.set32(px + x, py + y, c.rgba);
 			}
 		}
 	}
@@ -402,6 +438,10 @@ abstract class Image {
 		ImageFileFormatProvider[format].write(this, file);
 	}
 	void write(Stream file, char[] format) { ImageFileFormatProvider[format].write(this, file); }
+	
+	alias ImageFileFormatProvider.read read;
+	
+	bool check_bounds(int x, int y) { return !(x < 0 || y < 0 || x >= width || y >= height); }	
 }
 
 // TrueColor Bitmap
@@ -414,9 +454,17 @@ class Bitmap32 : Image {
 	ubyte bpp() { return 32; }
 	int width() { return _width; }
 	int height() { return _height; }
-
-	void set(int x, int y, uint v) { data[y * _width + x].v = v; }
+	
+	override Image duplicate() {
+		auto r = new Bitmap32(_width, _height);
+		r.chroma = chroma;
+		r.data = data.dup;
+		return r;
+	}
+	
+	void set(int x, int y, uint v) { if (check_bounds(x, y)) data[y * _width + x].v = v; }
 	uint get(int x, int y) {
+		if (!check_bounds(x, y)) return 0;
 		uint c = data[y * _width + x].v;
 		if (using_chroma && chroma.v == c) return RGBA(0, 0, 0, 0).v;
 		return c;
@@ -567,8 +615,8 @@ class Bitmap8 : Image {
 	int width() { return _width; }
 	int height() { return _height; }
 
-	void set(int x, int y, uint v) { data[y * _width + x] = v; }
-	uint get(int x, int y) { return data[y * _width + x]; }
+	void set(int x, int y, uint v) { if (check_bounds(x, y)) data[y * _width + x] = v; }
+	uint get(int x, int y) { return check_bounds(x, y) ? data[y * _width + x] : 0; }
 	override RGBA get32(int x, int y) { return palette[get(x, y) % palette.length];		 }
 	
 	override int ncolor() { return palette.length;}
