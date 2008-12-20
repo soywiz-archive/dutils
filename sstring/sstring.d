@@ -1,5 +1,25 @@
 import std.string;
 
+int hex2dec(char[] s) {
+	int r;
+	foreach (c; s) {
+		int cv;
+		if (c >= '0' && c <= '9') {
+			cv = c - '0';
+		} else if (c >= 'a' && c <= 'f') {
+			cv = c - 'a' + 10;
+		} else if (c >= 'A' && c <= 'F') {
+			cv = c - 'A' + 10;
+		} else {
+			//continue;
+			break;
+		}
+		r *= 0x10;
+		r += cv;
+	}
+	return r;
+}
+
 bool starts_with(char[] a, char[] b) {
 	if (a.length < b.length) return false;
 	return a[0..b.length] == b[0..b.length];

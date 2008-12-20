@@ -308,7 +308,8 @@ abstract class Image {
 		throw(new Exception("Not implemented (get32)"));
 	}
 	
-	Image filter(RGBA delegate(int, int, RGBA) func) {
+	Image filter(RGBA delegate(int, int, RGBA) func, bool duplicate = false) {
+		if (duplicate) { return this.duplicate.filter(func, false); }
 		int w = width, h = height;
 		for (int y = 0; y < h; y++) {
 			for (int x = 0; x < w; x++) {

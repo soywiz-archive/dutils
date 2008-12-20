@@ -3,6 +3,8 @@ import std.string, std.stdio, std.stream, std.file, std.path, std.math, std.c.wi
 
 struct REMOTE_DATA {
 	uint v;
+	//WINBASEAPI HINSTANCE WINAPI LoadLibraryA(LPCSTR);
+	extern (Windows) HINSTANCE function(LPCSTR) LoadLibrary;
 }
 
 extern(C) int test_function(REMOTE_DATA* data = null) {
@@ -30,6 +32,8 @@ void do_process(Process p) {
 	//writefln(w.process);
 }
 
+
+
 void main() {
 	//writefln((&test_function)[0..1].length);
 
@@ -42,12 +46,35 @@ void main() {
 	//writefln(&test_function);
 	//writefln(&test_function_ward);
 	
-	foreach (w; Process.ListWindows()) {
-		if (w.get_class == "yumemirukusuri") {
-			auto p = w.process;
-			//do_process(w.process);
-			writefln(p);
-			p.inject("xmllite.dll");
+	STARTUPINFO si;
+	PROCESS_INFORMATION pi;
+	
+	CreateProcessA(
+		r"yumemiru.exe",
+		"",
+		null,
+		null,
+		0,
+		0x00000008,
+		null,
+		null,
+		&si,
+		&pi
+	);
+
+	while (true) {
+		Sleep(50);
+		foreach (w; Window.list) {
+			if (w._class == "yumemirukusuri") {
+				auto p = w.process;
+				//do_process(w.process);
+				writefln(p);
+				//p.inject("xmllite.dll");
+				//p.inject(r"C:\projects\googlecode.com\dutils\procwin\temp.dll");
+				//p.inject(r"C:\dev\dmd\samples\d\mydll\mydll.dll");
+				p.inject(r"yumemiru_loader.dll");
+				return;
+			}
 		}
 	}
 }
