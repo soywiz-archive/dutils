@@ -442,7 +442,11 @@ abstract class Image {
 	
 	alias ImageFileFormatProvider.read read;
 	
-	bool check_bounds(int x, int y) { return !(x < 0 || y < 0 || x >= width || y >= height); }	
+	bool check_bounds(int x, int y) { return !(x < 0 || y < 0 || x >= width || y >= height); }
+	
+	Image channel(int idx) {
+		throw(new Exception("Channel getter not implemented"));
+	}
 }
 
 // TrueColor Bitmap
@@ -451,6 +455,41 @@ class Bitmap32 : Image {
 	int _width, _height;
 	bool using_chroma = false;
 	RGBA chroma;
+	
+	RGBA *get_pos(int x, int y) {
+		if (!check_bounds(x, y)) return null;
+		return &data[y * _width + x];
+	}
+
+	class Channel : Image {
+		int idx;
+		
+		this(int idx) {
+			this.idx = idx;
+		}
+		
+		bool hasPalette() { return true; }
+		RGBA color(int n) { return RGBA(n, n, n, 0xFF); }
+		
+		ubyte bpp() { return 8; }
+		int width() { return _width; }
+		int height() { return _height; }
+		
+		void set(int x, int y, uint v) {
+			auto p = get_pos(x, y);
+			if (p !is null) p.vv[idx] = v;
+		}
+
+		uint get(int x, int y) {
+			auto p = get_pos(x, y);
+			if (p !is null) return p.vv[idx];
+			return -1;
+		}
+	}
+
+	Image channel(int idx) {
+		return new Channel(idx);
+	}
 
 	ubyte bpp() { return 32; }
 	int width() { return _width; }
