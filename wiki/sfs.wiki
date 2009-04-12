@@ -1,5 +1,6 @@
 #summary Simple FileSystem
 #labels iso,zip,xa,filesystem,lzma,deflate
+#sidebar TOC
 
 = Introduction =
 
