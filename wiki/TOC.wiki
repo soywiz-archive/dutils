@@ -1,2 +1,3 @@
-* [simple_image]
-* [lzma]
+  * [simple_image]
+  * [lzma]
+  * [sfs]
