@@ -1,4 +1,6 @@
 #labels lzma,d,uncompress
+#sidebar TOC
+
 = Introduction =
 
 D wrapper for simple LZMA decoding.
