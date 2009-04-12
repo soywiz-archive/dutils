@@ -1,4 +1,6 @@
 #labels bmp,tga,png,gim,tm2,tim2,psd
+#sidebar TOC
+
 simple_image is a very lightweight library for load, manipulate and save color-mapped and true color images without any external dependence.
 
 Reading:
