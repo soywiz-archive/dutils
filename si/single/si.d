@@ -294,6 +294,7 @@ abstract class Image {
 	// Data
 	void set(int x, int y, uint v);
 	uint get(int x, int y);
+	ubyte[] _data() { return null; }
 
 	void set32(int x, int y, RGBA c) {
 		if (bpp == 32) { return set(x, y, c.v); }
@@ -455,6 +456,8 @@ class Bitmap32 : Image {
 	int _width, _height;
 	bool using_chroma = false;
 	RGBA chroma;
+	
+	ubyte[] _data() { return cast(ubyte[])data; }
 	
 	RGBA *get_pos(int x, int y) {
 		if (!check_bounds(x, y)) return null;
@@ -650,6 +653,8 @@ class Bitmap8 : Image {
 	RGBA[] palette;
 	ubyte[] data;
 	int _width, _height;
+	
+	ubyte[] _data() { return cast(ubyte[])data; }
 
 	override ubyte bpp() { return 8; }
 	int width() { return _width; }
