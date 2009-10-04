@@ -26,6 +26,7 @@ class Segments {
 			if (r == 0) r = this.r - that.r;
 			return r;
 		}
+		int opEquals(Object o) { Segment that = cast(Segment)o; return (this.l == that.l) && (this.r == that.r); }
 		void grow(Segment s) {
 			l = min(l, s.l);
 			r = max(r, s.r);
