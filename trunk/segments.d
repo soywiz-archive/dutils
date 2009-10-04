@@ -72,4 +72,17 @@ class Segments {
 	}
 
 	char[] toString() { char[] r = "Segments {\n"; foreach (s; segments) r ~= "  " ~ s.toString ~ "\n"; r ~= "}"; return r; }
+
+	unittest {
+		auto ss = new Segments;
+		ss += Segment(0, 100);
+		ss += Segment(50, 200);
+		ss += Segment(-50, 0);
+		ss -= Segment(0, 50);
+		ss -= Segment(0, 75);
+		ss += Segment(-1500, -100);
+		ss -= Segment(-1000, 1000);
+		assert(ss.segments.length == 1);
+		assert(ss.segments[0] == Segment(-1500, -1000));
+	}
 }
