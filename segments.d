@@ -31,7 +31,7 @@ class Segments {
 			l = min(l, s.l);
 			r = max(r, s.r);
 		}
-		char[] toString() { return format("(%d, %d)", l, r); }
+		char[] toString() { return format("(%08X, %08X)", l, r); }
 	}
 	Segment[] segments;
 	void refactor() {
@@ -41,6 +41,9 @@ class Segments {
 		foreach (s; ss) if (s.valid) segments ~= s;
 		*/
 	}
+	
+	long length() { return segments.length; }
+	Segment opIndex(int idx) { return segments[idx]; }
 
 	Segments opAddAssign(Segment s) {
 		foreach (cs; segments) {
@@ -83,7 +86,7 @@ class Segments {
 		ss -= Segment(0, 75);
 		ss += Segment(-1500, -100);
 		ss -= Segment(-1000, 1000);
-		assert(ss.segments.length == 1);
-		assert(ss.segments[0] == Segment(-1500, -1000));
+		assert(ss.length == 1);
+		assert(ss[0] == Segment(-1500, -1000));
 	}
 }
