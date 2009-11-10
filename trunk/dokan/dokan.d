@@ -29,6 +29,7 @@ static void copywchar(wchar[] to, wchar[] from) {
 	to[0..len] = from[0..len]; to[len] = 0;
 }
 
+// Error Codes (ERROR_SUCCESS, ...): http://msdn.microsoft.com/en-us/library/ms681382(VS.85).aspx
 extern (Windows) {
 	const wchar[] DOKAN_DRIVER_NAME = "dokan.sys";
 	
