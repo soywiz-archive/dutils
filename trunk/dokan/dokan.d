@@ -1,6 +1,33 @@
-import std.stdio;
-import std.stream, std.file;
-import std.c.windows.windows;
+/*
+  Dokan : user-mode file system library for Windows
+
+  Copyright (C) 2008 Hiroki Asakawa info@dokan-dev.net
+
+  http://dokan-dev.net/en
+
+This program is free software; you can redistribute it and/or modify it under
+the terms of the GNU Lesser General Public License as published by the Free
+Software Foundation; either version 3 of the License, or (at your option) any
+later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public License along
+with this program. If not, see <http://www.gnu.org/licenses/>.
+*/
+module dokan;
+
+public import std.stdio, std.stream, std.file, std.path, std.utf, std.string;
+public import std.c.windows.windows;
+
+static int strlen(wchar *s) { int c; while (*s++ != 0) c++; return c; }
+static wchar[] towchar(wchar *s) { return s[0..strlen(s)]; }
+static void copywchar(wchar[] to, wchar[] from) {
+	int len = ((to.length - 1) < from.length) ? (to.length - 1) : from.length;
+	to[0..len] = from[0..len]; to[len] = 0;
+}
 
 extern (Windows) {
 	const wchar[] DOKAN_DRIVER_NAME = "dokan.sys";
@@ -120,8 +147,6 @@ class Dokan {
 	bool DebugMode;
 
 	extern (Windows) {
-		static int strlen(wchar *s) { int c; while (*s++ != 0) c++; return c; }
-		static wchar[] towchar(wchar *s) { return s[0..strlen(s)]; }
 		static Dokan opCall(DOKAN_FILE_INFO* DokanFileInfo) { return (cast(Dokan)cast(void *)DokanFileInfo.DokanOptions.GlobalContext); }
 		static const char[] check_context = "if (!DokanFileInfo.DokanOptions.GlobalContext) return -1;";
 
@@ -134,11 +159,6 @@ class Dokan {
 
 		static int Static_GetDiskFreeSpace(ulong* FreeBytesAvailable, ulong* TotalNumberOfBytes, ulong* TotalNumberOfFreeBytes, DOKAN_FILE_INFO* DokanFileInfo) {
 			mixin(check_context); return Dokan(DokanFileInfo).GetDiskFreeSpace(*FreeBytesAvailable, *TotalNumberOfBytes, *TotalNumberOfFreeBytes, DokanFileInfo);
-		}
-		
-		static void copywchar(wchar[] to, wchar[] from) {
-			int len = ((to.length - 1) < from.length) ? (to.length - 1) : from.length;
-			to[0..len] = from[0..len]; to[len] = 0;
 		}
 		
 		static int Static_GetVolumeInformation(wchar* VolumeNameBuffer, uint VolumeNameSize, uint* VolumeSerialNumber, uint* MaximumComponentLength, uint *FileSystemFlags, wchar* FileSystemNameBuffer, uint FileSystemNameSize, DOKAN_FILE_INFO* DokanFileInfo) {
@@ -226,60 +246,62 @@ class Dokan {
 	}
 
 	int ReadFile(wchar[] FileName, void* Buffer, uint NumberOfBytesToRead, out uint NumberOfBytesRead, ulong Offset, DOKAN_FILE_INFO* DokanFileInfo) {
-		writefln("!!Unprocessed ReadFile");
-		return -1;
+		writefln("!!Unprocessed ReadFile (FileName:'%s', NumberOfBytesToRead:%d, Offset:%d)", FileName, NumberOfBytesToRead, Offset);
+		NumberOfBytesRead = NumberOfBytesToRead;
+		return 0;
 	}
 
 	int WriteFile(wchar[] FileName, void* Buffer, uint NumberOfBytesToWrite, out uint NumberOfBytesWritten, ulong Offset, DOKAN_FILE_INFO* DokanFileInfo) {
-		writefln("!!Unprocessed WriteFile");
-		return -1;
+		writefln("!!Unprocessed WriteFile (FileName:'%s', NumberOfBytesToWrite:%d, Offset:%d)", FileName, NumberOfBytesToWrite, Offset);
+		NumberOfBytesWritten = NumberOfBytesToWrite;
+		return 0;
 	}
 
 	int FlushFileBuffers(wchar[] FileName, DOKAN_FILE_INFO* DokanFileInfo) {
-		writefln("!!Unprocessed FlushFileBuffers");
-		return -1;
+		writefln("!!Unprocessed FlushFileBuffers (FileName:'%s')", FileName);
+		return 0;
 	}
 
 	int SetEndOfFile(wchar[] FileName, ulong Length, DOKAN_FILE_INFO* DokanFileInfo) {
-		writefln("!!Unprocessed SetEndOfFile");
-		return -1;
+		writefln("!!Unprocessed SetEndOfFile (FileName:'%s', Length:%d)", FileName, Length);
+		return 0;
 	}
 	
 	int MoveFile(wchar[] ExistingFileName, wchar[] NewFileName, bool ReplaceExisting, DOKAN_FILE_INFO* DokanFileInfo) {
-		writefln("!!Unprocessed MoveFile");
-		return -1;
+		writefln("!!Unprocessed MoveFile (ExistingFileName:'%s', NewFileName:'%s', ReplaceExisting:%d)", ExistingFileName, NewFileName, ReplaceExisting);
+		return 0;
 	}
 	
 	int SetFileAttributes(wchar[] FileName, uint FileAttributes, DOKAN_FILE_INFO* DokanFileInfo) {
-		writefln("!!Unprocessed SetFileAttributes");
-		return -1;
+		writefln("!!Unprocessed SetFileAttributes (FileName:'%s', FileAttributes:%08X)", FileName, FileAttributes);
+		return 0;
 	}
 	
-	int SetFileTime(wchar[] FileName, out FILETIME CreationTime, out FILETIME LastAccessTime, out FILETIME LastWriteTime, DOKAN_FILE_INFO* DokanFileInfo) {
-		writefln("!!Unprocessed SetFileTime");
-		return -1;
+	int SetFileTime(wchar[] FileName, in FILETIME CreationTime, in FILETIME LastAccessTime, in FILETIME LastWriteTime, DOKAN_FILE_INFO* DokanFileInfo) {
+		writefln("!!Unprocessed SetFileTime (FileName:'%s', CreationTime:'%s', LastAccessTime:'%s', LastWriteTime:'%s')", FileName, cast(int)cast(void *)&CreationTime, cast(int)cast(void *)&LastAccessTime, cast(int)cast(void *)&LastWriteTime);
+		return 0;
 	}
 
 	int LockFile(wchar[] FileName, ulong ByteOffset, ulong Length, DOKAN_FILE_INFO* DokanFileInfo) {
-		writefln("!!Unprocessed LockFile");
-		return -1;
+		writefln("!!Unprocessed LockFile (FileName:'%s', ByteOffset:%d, Length:%d)", FileName, ByteOffset, Length);
+		return 0;
 	}
 
 	int UnlockFile(wchar[] FileName, ulong ByteOffset, ulong Length, DOKAN_FILE_INFO* DokanFileInfo) {
-		writefln("!!Unprocessed UnlockFile");
-		return -1;
+		writefln("!!Unprocessed UnlockFile (FileName:'%s', ByteOffset:%d, Length:%d)", FileName, ByteOffset, Length);
+		return 0;
 	}
 
 	int GetFileInformation(wchar[] FileName, out BY_HANDLE_FILE_INFORMATION Buffer, DOKAN_FILE_INFO* DokanFileInfo) {
-		writefln("!!Unprocessed GetFileInformation");
-		return -1;
+		writefln("!!Unprocessed GetFileInformation (FileName:'%s')", FileName);
+		return 0;
 	}
 	
 	int GetVolumeInformation(out wchar[] VolumeName, out uint VolumeSerialNumber, out uint MaximumComponentLength, out uint FileSystemFlags, out wchar[] FileSystemName, DOKAN_FILE_INFO* DokanFileInfo) {
 		writefln("!!Unprocessed GetVolumeInformation");
 		VolumeName             = "DokanVolume";
 		FileSystemName         = "DokanFS";
-		VolumeSerialNumber     = 0x_12_34_56_78;
+		VolumeSerialNumber     = 0x_00_00_00_00;
 		FileSystemFlags        = 0x_00_00_00_00;
 		MaximumComponentLength = 255;
 		return 0;
@@ -294,12 +316,12 @@ class Dokan {
 	}
 
 	int FindFiles(wchar[] PathName, FINDCALLBACK Callback, DOKAN_FILE_INFO* DokanFileInfo) {
-		writefln("!!Unprocessed FindFiles");
+		writefln("!!Unprocessed FindFiles (PathName:'%s')", PathName);
 		return 0;
 	}
 
 	int FindFilesWithPattern(wchar[] PathName, wchar[] Pattern, FINDCALLBACK Callback, DOKAN_FILE_INFO* DokanFileInfo) {
-		writefln("!!Unprocessed FindFilesWithPattern");
+		writefln("!!Unprocessed FindFilesWithPattern (PathName:'%s', Pattern:'%s')", PathName, Pattern);
 		return 0;
 	}
 
@@ -315,7 +337,7 @@ class Dokan {
 
 	int CreateDirectory(wchar[] FileName, DOKAN_FILE_INFO* DokanFileInfo) {
 		writefln("!!Unprocessed CreateDirectory (FileName:'%s')", FileName);
-		return -1;
+		return 0;
 	}
 
 	int DeleteFile(wchar[] FileName, DOKAN_FILE_INFO* DokanFileInfo) {
@@ -330,17 +352,17 @@ class Dokan {
 
 	int CloseFile(wchar[] FileName, DOKAN_FILE_INFO* DokanFileInfo) {
 		writefln("!!Unprocessed CloseFile (FileName:'%s')", FileName);
-		return -1;
+		return 0;
 	}
 
 	int Cleanup(wchar[] FileName, DOKAN_FILE_INFO* DokanFileInfo) {
 		writefln("!!Unprocessed Cleanup (FileName:'%s')", FileName);
-		return -1;
+		return 0;
 	}
 	
 	int Unmount(DOKAN_FILE_INFO* DokanFileInfo) {
 		writefln("!!Unprocessed Unmount");
-		return -1;
+		return 0;
 	}
 
 	static DOKAN_OPERATIONS dokanOperations = {
