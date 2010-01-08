@@ -1,5 +1,8 @@
-import std.stdio, std.file, std.stream, std.string;
-
+/*
+CD digital audio: 2352 Data
+CD-ROM (mode 1):  12 Sync + 4 Sector ID + 2048 Data + 4 Error Detection + 8 Zero + 276 Error Correction
+CD-ROM (mode 2):  12 Sync + 4 Sector ID + 2336 Data
+*/
 ubyte[] GenerateSector(ubyte[] data, ubyte[] _data, int minute, int second, int frame, int mode, int form = 0, bool EOR = false, bool EOF = false) in {
 	assert(data.length == 0x930);
 } body {
@@ -13,7 +16,7 @@ ubyte[] GenerateSector(ubyte[] data, ubyte[] _data, int minute, int second, int 
 	static const uint L2_P = 43 * 2 * 2;
 	static const uint L2_Q = 26 * 2 * 2;
 
-	void SetECC_Q(ubyte[] _data, ubyte[] _output) in {
+	static void SetECC_Q(ubyte[] _data, ubyte[] _output) in {
 		assert(_data.length == 4 + 0x800 + 4 + 8 + L2_P);
 		assert(_output.length == L2_Q);	
 	} body {
@@ -35,8 +38,7 @@ ubyte[] GenerateSector(ubyte[] data, ubyte[] _data, int minute, int second, int 
 		}
 	}
 
-	void SetECC_P(ubyte[] _data, ubyte[] _output) 
-	in {
+	static void SetECC_P(ubyte[] _data, ubyte[] _output) in {
 		assert(_data.length == 43 * 24 * 2);
 		assert(_output.length == L2_P);
 	} body {
@@ -59,7 +61,7 @@ ubyte[] GenerateSector(ubyte[] data, ubyte[] _data, int minute, int second, int 
 		}
 	}
 
-	void SetAddress(ubyte[] data) in {
+	static void SetAddress(ubyte[] data, int minute, int second, int frame, int mode) in { // Sector ID.
 		assert(data.length == 4);
 	} body {
 		data[0] = minute;
@@ -68,13 +70,13 @@ ubyte[] GenerateSector(ubyte[] data, ubyte[] _data, int minute, int second, int 
 		data[3] = mode;
 	}
 
-	void SetSync(ubyte[] sync) in {
+	static void SetSync(ubyte[] sync) in {
 		assert(sync.length == 12);
 	} body {
 		sync[0..12] = cast(ubyte[])x"00FFFFFFFFFFFFFFFFFFFF00";
 	}
 
-	void SetEDC(ubyte[] edc, ubyte[] data) in {
+	static void SetEDC(ubyte[] edc, ubyte[] data) in {
 		assert(edc.length == 4);
 	} body  {
 		uint edc_i = 0;
@@ -85,7 +87,8 @@ ubyte[] GenerateSector(ubyte[] data, ubyte[] _data, int minute, int second, int 
 		edc[2] = ((edc_i >> 16) & 0xFF);
 		edc[3] = ((edc_i >> 24) & 0xFF);
 	}
-	void SetSubheader(ubyte[] data) in {
+
+	static void SetSubheader(ubyte[] data, int mode, int form, bool EOR, bool EOF) in {
 		assert(data.length == 8);
 	} body {
 		ubyte inf = 8 | (1 * EOR) | (128 * EOF);
@@ -102,13 +105,12 @@ ubyte[] GenerateSector(ubyte[] data, ubyte[] _data, int minute, int second, int 
 	SetSync(data[0..12]);
 
 	// Sets SubHeader
-	SetSubheader(data[0x10..0x18]);
+	SetSubheader(data[0x10..0x18], mode, form, EOR, EOF);
 
 	switch (mode) {
-		default: throw(new Exception(format("Unimplemented Sector Mode %d", mode)));
+		default: assert(mode != 0, "Unimplemented Sector Mode");
 		case 0: break;
 		case 1:
-			SetAddress(data[12..16]);
 			SetEDC(data[0x810..0x810 + 4], data[0..0x810]);
 			SetECC_P(data[12..12 + 2064], data[0x81C..0x8C8]);
 			SetECC_Q(data[12..12 + 4 + 0x800 + 4 + 8 + L2_P], data[0x8C8..0x930]);
@@ -121,7 +123,7 @@ ubyte[] GenerateSector(ubyte[] data, ubyte[] _data, int minute, int second, int 
 			}
 			
 			switch (form) {
-				default: throw(new Exception(format("Unimplemented Sector Mode 2 Form %d", form)));
+				default: assert(form != 0, "Unimplemented Sector Mode 2 Form");
 				case 0: break;
 				case 1:
 					// Sets EDC
@@ -138,10 +140,37 @@ ubyte[] GenerateSector(ubyte[] data, ubyte[] _data, int minute, int second, int 
 					SetEDC(data[0x92C..0x92C + 4], data[0x10..0x92C]);
 				break;
 			}
-			
-			SetAddress(data[12..16]);
 		break;
+	}
+	
+	if (mode != 0) {
+		SetAddress(data[12..16], minute, second, frame, mode);
 	}
 	
 	return data;
 }
+
+unittest {
+	ubyte[0x930] sector;
+	ubyte[0x800] data;
+	GenerateSector(sector, data, /* minute */ 0, /* second */ 2, /* frame */ 0, /* mode */ 2, /* form */ 1);
+	assert(
+		cast(ubyte[])sector
+		==
+		(
+			cast(ubyte[])
+			x"00FFFFFFFFFFFFFFFFFFFF00000200020000080000000800" ~ 
+			cast(ubyte[])data ~
+			cast(ubyte[])
+			x"0B888194000000000000FB000000FB00000000000000000000000000000000000000000000000000"
+			x"00000000000000000000000000000000000000000000000000000000000000000000000000000000"
+			x"0000000000001D859EA1000000000000F3000000F300000000000000000000000000000000000000"
+			x"00000000000000000000000000000000000000000000000000000000000000000000000000000000"
+			x"000000000000000000000000160D1F3500000000000000000000000000009EA18E6172E362230000"
+			x"0000000000000000000000000000B900D200A5006700A90000000000000000000000000000000000"
+			x"00001F351B487053742E000000000000000000000000000000004200210056009400A10000000000"
+		)
+	);
+}
+
+void main() { }
