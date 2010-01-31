@@ -59,14 +59,14 @@ class StreamAggregator : Stream {
 	Map currentMap;
 	Map[] maps;
 	uint currentPosition;
-	uint positionMask = 0x_0FFFFFFF;
+	//uint positionMask = 0x_0FFFFFFF;
 
 	void clearCache() {
 		foreach (map; maps) map.clearCache();
 	}
 
 	auto addMap(uint start, Stream stream) {
-		start &= positionMask;
+		//start &= positionMask;
 		maps ~= new Map(stream, start, cast(uint)(start + stream.size));
 		return this;
 	}
@@ -90,7 +90,7 @@ class StreamAggregator : Stream {
 			case SeekPos.Set, SeekPos.End: currentPosition = cast(uint)offset; break;
 			case SeekPos.Current: currentPosition += offset; break;
 		}
-		currentPosition &= positionMask;
+		//currentPosition &= positionMask;
 		currentMap = null;
 		foreach (map; maps) {
 			if (currentPosition >= map.start && currentPosition < map.end) {
@@ -421,22 +421,37 @@ class MipsPointerPatch {
 
 	void cleanSegments() {
 		scope ubyte[] temp;
+		writef("Cleaning segments...");
 		foreach (range; ranges) {
 			mmap.position = range.start;
 			if (temp.length < range.length) temp.length = range.length;
 			mmap.write(temp[0..range.length]);
 		}
+		writefln("Ok");
 	}
 
 	void patch() {
 		PatchCode[][uint] LUI;
 		bool globalError;
+		writef("Patching...");
+		int text_count = 0;
+		int patch_count = 0;
 		foreach (pentry; search) {
-			foreach (patch; pentry.patches) {
-				string text = pentry.text;
-				uint pos = ranges.getReuse(text);
+			text_count++;
+
+			string text = pentry.text;
+			uint pos = ranges.getReuse(text);
+			try {
 				mmap.position = pos;
 				mmap.writeString(text ~ '\0');
+			} catch (Exception e) {
+				writefln("Can't write translated string to 0x%08X", pos);
+				throw(e);
+			}
+
+			foreach (patch; pentry.patches) {
+				patch_count++;
+
 				patch.patch(mmap, pos);
 
 				PatchCode pcode = cast(PatchCode)patch;
@@ -445,6 +460,7 @@ class MipsPointerPatch {
 				}
 			}
 		}
+		writefln("texts(%d) patches(%d)", text_count, patch_count);
 		foreach (patches; LUI) {
 			const LUI_MASK = 0x_FFFF_0000;
 			//const LUI_MASK = 0x_FFFF_FFFF;
@@ -461,7 +477,7 @@ class MipsPointerPatch {
 				globalError |= error;
 			}
 		}
-		assert(!globalError);
+		//assert(!globalError);
 	}
 
 	void execute() {
@@ -684,7 +700,7 @@ class TextSearcher {
 				n = start;
 			} else {
 				results ~= Result(start + offset, end + offset, text);
-				//writefln("%08X:%02X:'%s'", 0x800A0000 + start, end - start, quote(text));
+				//writefln("%08X:%02X:'%s'", offset + start, offset + end, addslashes(text));
 			}
 			//break;
 		}
@@ -834,7 +850,7 @@ int main(string[] args) {
 		scope filew = new std.stream.File("pointers.txt", FileMode.OutNew);
 		foreach (address, si; search) {
 			if (si.patches.length) {
-				filew.writef("%08X:'", address);
+				filew.writef("%08X:'", si.start);
 				filew.writeString(addslashes(si.text));
 				filew.writefln("'");
 				foreach (patchAddress, patch; si.patches) {
@@ -855,8 +871,8 @@ int main(string[] args) {
 	}
 
 	void patchFile() {
-		auto search = new MipsPointerSearch(mmap);
-		auto texts = extractTexts("texts.txt");
+		auto search  = new MipsPointerSearch(mmap);
+		auto texts   = extractTexts("texts.txt");
 		auto patches = extractPatches("pointers.txt");
 
 		foreach (text; texts) {
@@ -865,18 +881,20 @@ int main(string[] args) {
 			pe.end   = text.end;
 			pe.text  = text.text;
 			auto textAddressBase = text.start & search.valueMask;
-			if (textAddressBase in patches) {
-				pe.patches = patches[textAddressBase];
+			//writefln("%08X, %08X", patches.keys[0]);
+			if (text.start in patches) {
+				pe.patches = patches[text.start];
 			}
 			search.search[pe.start] = pe;
 		}
 		//writefln("%08X", patches.keys.sort[0]);
 		
 		MipsPointerPatch(search);
+		writefln("Pached successfully");
 		showHelp = false;
 	}
 
-	void map(string option, string value) {
+	void addMap(string option, string value) {
 		scope matches = std.regexp.search(value, r"^([^@:]+)(:([0-9a-f]*)(\-([0-9a-f]*))?)?(@([0-9a-f]+))?", "mi");
 		if (matches) {
 			auto file       = matches[1];
@@ -906,7 +924,7 @@ int main(string[] args) {
 	if (args.length > 1) {
 		getopt(args,
 			config.bundling,
-			"map", &map,
+			"map", &addMap,
 
 			config.noBundling,
 			"t", &findTextBlocks,
