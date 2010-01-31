@@ -664,18 +664,43 @@ class TextSearcher {
 			if (text.length < MIN_LENGTH) return false;
 			if ((start % ALIGNMENT) != 0) return false;
 			
-			int count_total   = text.length;
-			int count_special = 0;
+			int count_total    = text.length;
+			int count_special  = 0;
+			int count_spaces   = 0;
+			int count_symbol   = 0;
+			int count_nonalpha = 0;
+			int count_alpha    = 0;
 			
 			foreach (c; text) {
 				if (c < 0x20) {
 					//return false;
 					count_special++;
+					count_nonalpha++;
+				} else if (c == 0x20) {
+					count_spaces++;
+					count_nonalpha++;
+				} else if (!std.ctype.isalpha(c)) {
+					count_symbol++;
+					count_nonalpha++;
+				} else {
+					count_alpha++;
 				}
 				if (c > 0x7F) return false;
 			}
-			
-			if (count_special >= count_total / 5) return false;
+
+			real per_spaces   = cast(real)count_spaces    / cast(real)count_total;
+			real per_special  = cast(real)count_special   / cast(real)count_total;
+			real per_symbol   = cast(real)count_symbol    / cast(real)count_total;
+			real per_nonalpha = cast(real)count_nonalpha  / cast(real)count_total;
+			real per_alpha    = cast(real)count_alpha     / cast(real)count_total;
+
+			if (per_spaces    >= 0.4) return false;
+			if (per_special   >= 0.3) return false;
+			if (per_symbol    >= 0.4) return false;
+			if (per_nonalpha  >= 0.4) return false;
+			if (count_total < 4 && per_alpha < 1.0) return false;
+
+			//0x801b36a4
 
 			for (int n = end; ((n % 4) != 0); n++) {
 				if (data[end] != '\0') return false;
