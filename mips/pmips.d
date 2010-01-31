@@ -694,10 +694,10 @@ class TextSearcher {
 			real per_nonalpha = cast(real)count_nonalpha  / cast(real)count_total;
 			real per_alpha    = cast(real)count_alpha     / cast(real)count_total;
 
-			if (per_spaces    >= 0.4) return false;
-			if (per_special   >= 0.3) return false;
-			if (per_symbol    >= 0.4) return false;
-			if (per_nonalpha  >= 0.4) return false;
+			if (count_total < 5 && per_spaces    >= 0.4) return false;
+			if (count_total < 5 && per_special   >= 0.3) return false;
+			if (count_total < 5 && per_symbol    >= 0.4) return false;
+			if (count_total < 5 && per_nonalpha  >= 0.4) return false;
 			if (count_total < 4 && per_alpha < 1.0) return false;
 
 			//0x801b36a4
@@ -778,7 +778,7 @@ int main(string[] args) {
 		writefln("  -w  (3) Write changes from 'texts.txt' using references from 'pointers.txt'.");
 		writefln("");
 		writefln("Examples:");
-		writefln("  pmips.exe -map SLUS_006.26:800@800A0000 -f");
+		writefln("  pmips.exe -map SLUS_006.26:800@800A0000 -t");
 	}
 	
 	void findTextBlocks(string option) {
