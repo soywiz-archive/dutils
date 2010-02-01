@@ -4,8 +4,8 @@ import string_utils;
 import std.string, std.stream, std.stdio;
 
 abstract class Patcheable {
-	uint value, valueRaw, valueNew;
-	uint address;
+	uint value, valueRaw, valueNew; // Pointee
+	uint address; // Pointer address
 	string text;
 
 	string toString();
@@ -22,7 +22,7 @@ class PatchPointer : Patcheable {
 	}
 
 	string toString() {
-		return std.string.format("T:%08X:[%08X]:'", address, valueRaw) ~ addslashes(text) ~ "'";
+		return std.string.format("T:%08X:[%08X->%08X]:'", address, valueRaw, valueNew) ~ addslashes(text) ~ "'";
 	}
 
 	string simpleString() {
@@ -48,7 +48,7 @@ class PatchCode : Patcheable {
 	}
 
 	string toString() {
-		return std.string.format("C:%08X:%08X:[%08X]:'", addressHi, addressLo, valueRaw) ~ addslashes(text) ~ "'";
+		return std.string.format("C:%08X:%08X:[%08X->%08X]:'", addressHi, addressLo, valueRaw, valueNew) ~ addslashes(text) ~ "'";
 	}
 
 	string simpleString() {
