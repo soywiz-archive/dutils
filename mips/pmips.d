@@ -174,12 +174,12 @@ int main(string[] args) {
 		mmap.close();
 		foreach (map; mmap.maps) {
 			writefln("Map('%s', %08X, %08X)", map.fileName, map.fileStart, map.fileEnd);
-			scope file0 = new SliceStream(new BufferedFile(map.fileName), map.fileStart, map.fileEnd);
-			scope file1 = new SliceStream(new BufferedFile(map.fileName ~ ".bak"), map.fileStart, map.fileEnd);
+			scope fileOriginal = new SliceStream(new BufferedFile(map.fileName ~ ".bak"), map.fileStart, map.fileEnd);
+			scope fileModified = new SliceStream(new BufferedFile(map.fileName), map.fileStart, map.fileEnd);
 			scope ppf = new PPF(map.fileName ~ ".ppf");
 			{
-				ppf.dataOriginal = cast(ubyte[])file0.readString(cast(int)file0.size);
-				ppf.dataModified = cast(ubyte[])file1.readString(cast(int)file1.size);
+				ppf.dataOriginal = cast(ubyte[])fileOriginal.readString(cast(int)fileOriginal.size);
+				ppf.dataModified = cast(ubyte[])fileModified.readString(cast(int)fileModified.size);
 				//ppf.dataOriginal = ppf.dataModified;
 				ppf.description = "Patch for " ~ map.fileName;
 				ppf.startOffset = cast(uint)map.fileStart;

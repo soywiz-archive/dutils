@@ -1,6 +1,8 @@
 module ppf;
 
-import std.stream, std.stdio, std.string;
+import std.stream, std.stdio, std.string, std.algorithm;
+
+//version = PPF_OPTIMIZE;
 
 class PPF {
 	align(1) struct Header {
@@ -45,26 +47,44 @@ class PPF {
 	
 	void writeBody() {
 		assert(dataModified.length >= dataOriginal.length);
-		int matched = 0;
+		int distinctCount = 0;
 		writefln("%08X", dataOriginal.length);
 		for (int n = 0; n <= dataOriginal.length; n++) {
 			//writefln("%02X: %02X", dataOriginal[n], dataModified[n]);
-			if ((dataOriginal.length == n) || (dataOriginal[n] == dataModified[n]) || (matched == 0xFF)) {
-				if (matched > 0) {
-					scope start = n - matched;
+			if ((dataOriginal.length == n) || (dataOriginal[n] == dataModified[n]) || (distinctCount >= 0xFF)) {
+				// Check if we will find a match in less than 8 bytes for optimizing output.
+				/*version (PPF_OPTIMIZE) {
+					if (distinctCount < 0x100) {
+						bool foundDistinct;
+						int m;
+						for (m = n; (m < n + 8) && (m < dataOriginal.length); m++) if (dataOriginal[m] != dataModified[m]) { foundDistinct = true; break; }
+						if (foundDistinct) {
+							m--;
+							int add = m - n;
+							if (distinctCount + add < 0x100 - 1) {
+								//writefln("Optimize! %d", m - n);
+								distinctCount += add;
+								n = m;
+								continue;
+							}
+						}
+					}
+				}*/
+				if (distinctCount > 0) {
+					scope start = n - distinctCount;
 					scope slice = dataModified[start..n];
 
-					assert(slice.length == matched);
-					assert(matched < 0x100);
+					assert(slice.length == distinctCount);
+					assert(distinctCount < 0x100);
 
 					streamOutput.write(cast(uint)(start + startOffset));
-					streamOutput.write(cast(ubyte)matched);
+					streamOutput.write(cast(ubyte)distinctCount);
 					streamOutput.write(slice);
 
-					matched = 0;
+					distinctCount = 0;
 				}
 			} else {
-				matched++;
+				distinctCount++;
 			}
 		}
 	}
