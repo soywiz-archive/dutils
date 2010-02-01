@@ -114,28 +114,67 @@ static class RangeList {
 		rangeStart.remove(from);
 	}
 
-	Range getFreeRange(int length) {
-		foreach (range; this) { if (range.length >= length) return range; }
+	Range getFreeRange(int length, long suggested_segment = -1) {
+		Range[] valid_ranges;
+
+		bool same_segment(uint addr) { return (addr & 0xFFFF0000) == (suggested_segment & 0xFFFF0000); }
+			
+		foreach (range; this) {
+			if (range.length >= length) {
+				// Return directly a range in the segment.
+				if ((suggested_segment >= 0) && same_segment(range.start) && same_segment(range.end - 1)) {
+					//.writefln("Find segment! on 0x%08X with length %d.", suggested_segment, length);
+					return range;
+				}
+				// Store as a valid range.
+				valid_ranges ~= range;
+			}
+		}
+
+		if (suggested_segment != -1) {
+			.writefln("Didn't find a segment on 0x%08X with length %d.", suggested_segment, length);
+		}
+
+		// Any segment.
+		if (valid_ranges.length) return valid_ranges[0];
+
+		// Not valid ranges.
 		show();
 		throw(new Exception(format("Not enough space (%d)", length)));
 	}
 	
 	template GetReuse() {
 		uint[string] stringPos;
-		uint getReuse(string text) {
-			if (text in stringPos) {
-				return stringPos[text];
-			} else {
-				return stringPos[text] = getAndUse(text.length + 1);
+		uint getReuse(string text, long suggested_segment = -1) {
+			if ((text in stringPos) is null) {
+				return stringPos[text] = getAndUse(text.length, suggested_segment);
 			}
+			return stringPos[text];
+		}
+		/**
+		 * Puts all the texts all together in a segment. (64K)
+		 */
+		uint getReuse(string[] texts, long suggested_segment = -1) {
+			string text_joined = std.string.join(texts, "");
+			if ((text_joined in stringPos) is null) {
+				uint start = getAndUse(text_joined.length, suggested_segment);
+				assert((start & 0x_FFFF_0000) == ((start + text_joined.length) & 0x_FFFF_0000), "Texts must be together in the same segment.");
+				int pos = start;
+				foreach (text; texts) {
+					stringPos[text] = pos;
+					pos += text.length;
+				}
+				stringPos[text_joined] = start;
+			}
+			return stringPos[text_joined];
 		}
 	}
 
 	mixin GetReuse;
 
-	int getAndUse(int length) {
+	int getAndUse(int length, long suggested_segment = -1) {
 		int start;
-		use(start = getFreeRange(length).start, length);
+		use(start = getFreeRange(length, suggested_segment).start, length);
 		return start;
 	}
 

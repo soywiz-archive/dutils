@@ -81,22 +81,37 @@ class MipsPointerPatch {
 		foreach (pentry; search) {
 			text_count++;
 
-			string text = pentry.text;
+			/*
+			string text = pentry.text ~ '\0';
 			uint pos = ranges.getReuse(text);
 			try {
 				mmap.position = pos;
-				mmap.writeString(text ~ '\0');
+				mmap.writeString(text);
 			} catch (Exception e) {
 				writefln("Can't write translated string to 0x%08X", pos);
 				throw(e);
 			}
+			*/
 
 			foreach (patch; pentry.patches) {
+				PatchCode pcode = cast(PatchCode)patch;
+
+				string text = pentry.text ~ '\0';
+				long suggested_segment = -1;
+				if (pcode) suggested_segment = pcode.valueRaw;
+				uint pos = ranges.getReuse(text, suggested_segment);
+				try {
+					mmap.position = pos;
+					mmap.writeString(text);
+				} catch (Exception e) {
+					writefln("Can't write translated string to 0x%08X", pos);
+					throw(e);
+				}
+
 				patch_count++;
 
 				patch.patch(mmap, pos);
 
-				PatchCode pcode = cast(PatchCode)patch;
 				if (pcode !is null) {
 					LUI[pcode.addressHi] ~= pcode;
 				}
