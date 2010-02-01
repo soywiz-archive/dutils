@@ -109,7 +109,7 @@ class MipsPointerPatch {
 					if (error) {
 						writefln("Reused LUI with different value {");
 						foreach (patch; patches) {
-							writefln("  [%08X]::%s", patch.valueNew & LUI_MASK, patch);
+							writefln("  NewTextSegment(%08X) | %s", patch.valueNew & LUI_MASK, patch);
 						}
 						writefln("}");
 					}
@@ -147,10 +147,10 @@ class MipsPointerPatch {
 		
 		void patch_actually_new() {
 			void dopatch(Patcheable patch) {
-				uint address = ranges.getReuse(patch.text, patch.valueRaw);
-				mmap.position = address;
+				patch.valueNew = ranges.getReuse(patch.text, patch.valueRaw);
+				mmap.position = patch.valueNew;
 				mmap.writeString(patch.text);
-				patch.patch(mmap, address);
+				patch.patch(mmap, patch.valueNew);
 			}
 			writefln("Patching code instructions (HI(LUI)+LO(ORI/ADDI))...");
 			foreach (lui_addr, patches; code_patches_sorted_by_lui) { assert (patches.length);
@@ -171,9 +171,12 @@ class MipsPointerPatch {
 			writefln("Patching text instructions (32-bits)...");
 			foreach (patch; text_patches) dopatch(patch);
 		}
-		
-		alias patch_actually_new patch_actually;
-		//alias patch_actually_old patch_actually;
+
+		static if (0) {
+			alias patch_actually_new patch_actually;
+		} else {
+			alias patch_actually_old patch_actually;
+		}
 
 		prepare_patches();
 		patch_actually();
