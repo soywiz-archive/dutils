@@ -114,16 +114,14 @@ static class RangeList {
 		rangeStart.remove(from);
 	}
 
-	Range getFreeRange(int length, long suggested_segment = -1) {
+	Range getFreeRange(int length, long affinitySegment = -1) {
 		Range[] valid_ranges;
-
-		bool same_segment(uint addr) { return (addr & 0xFFFF0000) == (suggested_segment & 0xFFFF0000); }
-			
+		
 		foreach (range; this) {
 			if (range.length >= length) {
 				// Return directly a range in the segment.
-				if ((suggested_segment >= 0) && same_segment(range.start) && same_segment(range.end - 1)) {
-					//.writefln("Find segment! on 0x%08X with length %d.", suggested_segment, length);
+				if (hasAffinity(range.start, affinitySegment) && hasAffinity(range.end - 1, affinitySegment)) {
+					//.writefln("Find segment! on 0x%08X with length %d.", affinitySegment, length);
 					return range;
 				}
 				// Store as a valid range.
@@ -131,8 +129,8 @@ static class RangeList {
 			}
 		}
 
-		if (suggested_segment != -1) {
-			.writefln("Didn't find a segment on 0x%08X with length %d.", suggested_segment, length);
+		if (affinitySegment != -1) {
+			.writefln("Didn't find a segment on 0x%08X with length %d.", affinitySegment, length);
 		}
 
 		// Any segment.
@@ -142,39 +140,50 @@ static class RangeList {
 		show();
 		throw(new Exception(format("Not enough space (%d)", length)));
 	}
+
+	bool hasAffinity(uint address, long affinitySegment = -1, uint affinityMask = 0x_FFFF_0000) {
+		if (affinitySegment == -1) return true;
+		return (address & affinityMask) == (affinitySegment & affinityMask);
+	}
 	
 	template GetReuse() {
-		uint[string] stringPos;
-		uint getReuse(string text, long suggested_segment = -1) {
+		uint[][string] stringPos;
+
+		private uint getReuseInternal(string text, long affinitySegment = -1) {
+			foreach (address; stringPos[text]) if (hasAffinity(address, affinitySegment)) return address;
+			return stringPos[text][0];
+		}
+
+		uint getReuse(string text, long affinitySegment = -1) {
 			if ((text in stringPos) is null) {
-				return stringPos[text] = getAndUse(text.length, suggested_segment);
+				stringPos[text] ~= getAndUse(text.length, affinitySegment);
 			}
-			return stringPos[text];
+			return getReuseInternal(text);
 		}
 		/**
 		 * Puts all the texts all together in a segment. (64K)
 		 */
-		uint getReuse(string[] texts, long suggested_segment = -1) {
+		uint getReuse(string[] texts, long affinitySegment = -1) {
 			string text_joined = std.string.join(texts, "");
 			if ((text_joined in stringPos) is null) {
-				uint start = getAndUse(text_joined.length, suggested_segment);
-				assert((start & 0x_FFFF_0000) == ((start + text_joined.length) & 0x_FFFF_0000), "Texts must be together in the same segment.");
+				uint start = getAndUse(text_joined.length, affinitySegment);
+				assert(hasAffinity(start, start + text_joined.length - 1), "Texts must be together in the same segment.");
 				int pos = start;
 				foreach (text; texts) {
-					stringPos[text] = pos;
+					stringPos[text] ~= pos;
 					pos += text.length;
 				}
-				stringPos[text_joined] = start;
+				stringPos[text_joined] ~= start;
 			}
-			return stringPos[text_joined];
+			return getReuseInternal(text_joined);
 		}
 	}
 
 	mixin GetReuse;
 
-	int getAndUse(int length, long suggested_segment = -1) {
+	int getAndUse(int length, long affinitySegment = -1) {
 		int start;
-		use(start = getFreeRange(length, suggested_segment).start, length);
+		use(start = getFreeRange(length, affinitySegment).start, length);
 		return start;
 	}
 

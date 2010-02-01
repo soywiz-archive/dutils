@@ -3,16 +3,16 @@ module mips_patches;
 import string_utils;
 import std.string, std.stream, std.stdio;
 
-interface Patcheable {
+abstract class Patcheable {
 	string toString();
 	string simpleString();
+	string text;
 	void patch(Stream stream, uint newValue);
 }
 
 class PatchPointer : Patcheable {
 	uint value, valueRaw, valueNew;
 	uint address;
-	string text;
 
 	this(uint value, uint address, uint valueRaw, string text) {
 		this.value    = value;
@@ -22,7 +22,7 @@ class PatchPointer : Patcheable {
 	}
 
 	string toString() {
-		return std.string.format("T:%08X:[%08X]:", address, valueRaw) ~ addslashes(text);
+		return std.string.format("T:%08X:[%08X]:'", address, valueRaw) ~ addslashes(text) ~ "'";
 	}
 
 	string simpleString() {
@@ -39,7 +39,6 @@ class PatchCode : Patcheable {
 	uint value, valueRaw, valueNew;
 	uint addressHi;
 	uint addressLo;
-	string text;
 
 	this(int value, int addressHi, int addressLo, int valueRaw, string text) {
 		this.value     = value;
@@ -50,7 +49,7 @@ class PatchCode : Patcheable {
 	}
 
 	string toString() {
-		return std.string.format("C:%08X:%08X:[%08X]:", addressHi, addressLo, valueRaw) ~ addslashes(text);
+		return std.string.format("C:%08X:%08X:[%08X]:'", addressHi, addressLo, valueRaw) ~ addslashes(text) ~ "'";
 	}
 
 	string simpleString() {
