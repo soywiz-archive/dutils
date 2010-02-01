@@ -8,10 +8,15 @@ class StreamAggregator : Stream {
 		uint   start;
 		uint   end;
 		ubyte[] cached = null;
-		this(Stream stream, uint start, uint end) {
+		string fileName;
+		long fileStart, fileEnd;
+		this(Stream stream, uint start, uint end, string fileName = "unknown", long fileStart = 0, long fileEnd = 0) {
 			this.stream = stream;
 			this.start  = start;
 			this.end    = end;
+			this.fileName = fileName;
+			this.fileStart = fileStart;
+			this.fileEnd = fileEnd;
 		}
 		uint length() { return end - start; }
 		ubyte[] data() {
@@ -29,9 +34,9 @@ class StreamAggregator : Stream {
 		foreach (map; maps) map.clearCache();
 	}
 
-	auto addMap(uint start, Stream stream) {
+	auto addMap(uint start, Stream stream, string fileName = "unknown", long fileStart = 0, long fileEnd = 0) {
 		//start &= positionMask;
-		maps ~= new Map(stream, start, cast(uint)(start + stream.size));
+		maps ~= new Map(stream, start, cast(uint)(start + stream.size), fileName, fileStart, fileEnd);
 		return this;
 	}
 
@@ -76,5 +81,9 @@ class StreamAggregator : Stream {
 		slice.position = start;
 		slice.read(data);
 		return data;
+	}
+
+	override void close() {
+		foreach (map; maps) map.stream.close();
 	}
 }
