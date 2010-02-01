@@ -172,7 +172,7 @@ class MipsPointerPatch {
 			foreach (patch; text_patches) dopatch(patch);
 		}
 
-		static if (0) {
+		static if (1) {
 			alias patch_actually_new patch_actually;
 		} else {
 			alias patch_actually_old patch_actually;
