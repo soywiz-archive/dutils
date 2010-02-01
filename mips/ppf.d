@@ -48,6 +48,7 @@ class PPF {
 	void writeBody() {
 		assert(dataModified.length >= dataOriginal.length);
 		int distinctCount = 0;
+		int distinctStart = 0;
 		writefln("%08X", dataOriginal.length);
 		for (int n = 0; n <= dataOriginal.length; n++) {
 			//writefln("%02X: %02X", dataOriginal[n], dataModified[n]);
@@ -71,18 +72,17 @@ class PPF {
 					}
 				}*/
 				if (distinctCount > 0) {
-					scope start = n - distinctCount;
-					scope slice = dataModified[start..n];
+					scope slice = dataModified[distinctStart..n];
 
-					assert(slice.length == distinctCount);
+					assert(slice.length == distinctCount, std.string.format("%d == %d", slice.length, distinctCount));
 					assert(distinctCount < 0x100);
 
-					streamOutput.write(cast(uint)(start + startOffset));
+					streamOutput.write(cast(uint)(startOffset + distinctStart));
 					streamOutput.write(cast(ubyte)distinctCount);
 					streamOutput.write(slice);
-
-					distinctCount = 0;
 				}
+				distinctCount = 0;
+				distinctStart = n + 1;
 			} else {
 				distinctCount++;
 			}
