@@ -3,6 +3,7 @@ module pmips;
 import mips_patches;
 import string_utils;
 import stream_aggregator;
+import ppf;
 
 import pmips_textsearch;
 import pmips_pointersearch;
@@ -31,7 +32,7 @@ int main(string[] args) {
 		writefln("  -w  (3) Write changes from 'texts.txt' using references from 'pointers.txt'.");
 		writefln("");
 		writefln("Examples:");
-		writefln("  pmips.exe -map SLUS_006.26:800@800A0000 -t");
+		writefln("  pmips -map SLUS_006.26:800@800A0000 -t");
 	}
 	
 	void findTextBlocks(string option) {
@@ -169,31 +170,54 @@ int main(string[] args) {
 		
 		MipsPointerPatch(search);
 		writefln("Pached successfully");
+		writefln("Creating PPF");
+		mmap.close();
+		foreach (map; mmap.maps) {
+			writefln("Map('%s', %08X, %08X)", map.fileName, map.fileStart, map.fileEnd);
+			scope file0 = new SliceStream(new BufferedFile(map.fileName), map.fileStart, map.fileEnd);
+			scope file1 = new SliceStream(new BufferedFile(map.fileName ~ ".bak"), map.fileStart, map.fileEnd);
+			scope ppf = new PPF(map.fileName ~ ".ppf");
+			{
+				ppf.dataOriginal = cast(ubyte[])file0.readString(cast(int)file0.size);
+				ppf.dataModified = cast(ubyte[])file1.readString(cast(int)file1.size);
+				//ppf.dataOriginal = ppf.dataModified;
+				ppf.description = "Patch for " ~ map.fileName;
+				ppf.startOffset = cast(uint)map.fileStart;
+			}
+			ppf.write();
+			//writefln("%s", map.fileName);
+		}
+		//PPF.create();
 		showHelp = false;
 	}
 
 	void addMap(string option, string value) {
 		scope matches = std.regexp.search(value, r"^([^@:]+)(:([0-9a-f]*)(\-([0-9a-f]*))?)?(@([0-9a-f]+))?", "mi");
 		if (matches) {
-			auto file       = matches[1];
+			auto file_name  = matches[1];
 			auto file_start = hexdec(matches[3]);
 			auto file_end   = hexdec(matches[5]);
 			auto mem_start  = hexdec(matches[7]);
 			//foreach (n; 0..8) writefln("%d: %s", n, matches[n]);
-			writefln("MAP: file('%s'), file_start(0x_%08X), file_end(0x_%08X), mem_start(0x_%08X)", file, file_start, file_end, mem_start);
-			string fileBack = file ~ ".bak";
+			writefln("MAP: file('%s'), file_start(0x_%08X), file_end(0x_%08X), mem_start(0x_%08X)", file_name, file_start, file_end, mem_start);
+			string fileBack = file_name ~ ".bak";
 			if (!std.file.exists(fileBack)) {
-				writef("Backuping file '%s'->'%s'...", file, fileBack);
-				std.file.copy(file, fileBack);
+				writef("Backuping file '%s'->'%s'...", file_name, fileBack);
+				std.file.copy(file_name, fileBack);
 				writefln("Ok");
 			} else {
-				writef("Restoring file '%s'->'%s'...", fileBack, file);
-				std.file.copy(fileBack, file);
+				writef("Restoring file '%s'->'%s'...", fileBack, file_name);
+				std.file.copy(fileBack, file_name);
 				writefln("Ok");
 			}
 			
-			auto stream = new std.stream.File(file, FileMode.In | FileMode.Out);
-			mmap.addMap(cast(uint)mem_start, (file_end > file_start) ? (new SliceStream(stream, file_start, file_end)) : (new SliceStream(stream, file_start)));
+			auto stream = new std.stream.File(file_name, FileMode.In | FileMode.Out);
+			file_end = stream.size;
+			mmap.addMap(
+				cast(uint)mem_start,
+				(file_end > file_start) ? (new SliceStream(stream, file_start, file_end)) : (new SliceStream(stream, file_start)),
+				file_name, file_start, file_end
+			);
 		} else {
 			writefln("MAP: Invalid format for -map option ('%s').", value);
 		}
