@@ -107,7 +107,7 @@ class MipsPointerPatch {
 					bool error = false;
 					foreach (patch; patches[1..$]) if ((patch.valueNew & LUI_MASK) != (patches[0].valueNew & LUI_MASK)) { error = true; break; }
 					if (error) {
-						writefln("Reused LUI with different value {");
+						writefln("ERROR: Reused LUI with different value {");
 						foreach (patch; patches) {
 							writefln("  NewTextSegment(%08X) | %s", patch.valueNew & LUI_MASK, patch);
 						}
@@ -162,7 +162,11 @@ class MipsPointerPatch {
 						patches[0].valueRaw      // Use this segment if possible.
 					);
 				} catch (Exception e) {
-					writefln("Didn't been able to put '%s' in the same segment affinity with 0x%08X.", std.string.join(text_list, ""), patches[0].valueRaw);
+					writefln(
+						"Warning: Didn't been able to put '%s' CONTIGUOUS in the same segment affinity with 0x%08X. Will try to use same segment afinity without being contiguous.",
+						std.string.join(text_list, ""),
+						patches[0].valueRaw
+					);
 				}
 
 				foreach (patch; patches) dopatch(patch);
