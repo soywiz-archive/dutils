@@ -146,6 +146,12 @@ class MipsPointerPatch {
 		}
 		
 		void patch_actually_new() {
+			void dopatch(Patcheable patch) {
+				uint address = ranges.getReuse(patch.text, patch.valueRaw);
+				mmap.position = address;
+				mmap.writeString(patch.text);
+				patch.patch(mmap, address);
+			}
 			writefln("Patching code instructions (HI(LUI)+LO(ORI/ADDI))...");
 			foreach (lui_addr, patches; code_patches_sorted_by_lui) { assert (patches.length);
 				string[] text_list; foreach (patch; patches) text_list ~= patch.text;
@@ -159,15 +165,11 @@ class MipsPointerPatch {
 					writefln("Didn't been able to put '%s' in the same segment affinity with 0x%08X.", std.string.join(text_list, ""), patches[0].valueRaw);
 				}
 
-				foreach (patch; patches) {
-					patch.patch(mmap, ranges.getReuse(patch.text, patch.valueRaw));
-				}
+				foreach (patch; patches) dopatch(patch);
 			}
 
 			writefln("Patching text instructions (32-bits)...");
-			foreach (patch; text_patches) {
-				patch.patch(mmap, ranges.getReuse(patch.text));
-			}
+			foreach (patch; text_patches) dopatch(patch);
 		}
 		
 		alias patch_actually_new patch_actually;

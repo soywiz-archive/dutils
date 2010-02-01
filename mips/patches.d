@@ -4,16 +4,16 @@ import string_utils;
 import std.string, std.stream, std.stdio;
 
 abstract class Patcheable {
+	uint value, valueRaw, valueNew;
+	uint address;
+	string text;
+
 	string toString();
 	string simpleString();
-	string text;
 	void patch(Stream stream, uint newValue);
 }
 
 class PatchPointer : Patcheable {
-	uint value, valueRaw, valueNew;
-	uint address;
-
 	this(uint value, uint address, uint valueRaw, string text) {
 		this.value    = value;
 		this.valueRaw = valueRaw;
@@ -36,8 +36,7 @@ class PatchPointer : Patcheable {
 }
 
 class PatchCode : Patcheable {
-	uint value, valueRaw, valueNew;
-	uint addressHi;
+	alias address addressHi;
 	uint addressLo;
 
 	this(int value, int addressHi, int addressLo, int valueRaw, string text) {
