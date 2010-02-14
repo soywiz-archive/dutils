@@ -56,15 +56,20 @@ int main(string[] args) {
 		TextSearcher.Result[uint] texts;
 		writefln("Opening texts '%s'...", fileName);
 		scope file = new BufferedFile(fileName);
+		bool skipping = false;
 		while (!file.eof) {
 			string line = std.string.strip(cast(string)file.readLine);
-			//writefln("%s", line);
-			if (line.length) {
-				scope matches = std.regexp.search(line, r"^([^@:]+):(\w+):'(.*)'$", "mi");
-				if (matches !is null) {
-					uint start = cast(uint)hexdec(matches[1]);
-					uint end = start + cast(uint)hexdec(matches[2]);
-					texts[start] = TextSearcher.Result(start, end, stripslashes(matches[3]));
+			if (!skipping && line == "/*") { skipping = true; continue; }
+			if ( skipping && line == "*/") { skipping = false; continue; }
+			if (!skipping) {
+				//writefln("%s", line);
+				if (line.length) {
+					scope matches = std.regexp.search(line, r"^([^@:]+):(\w+):'(.*)'$", "mi");
+					if (matches !is null) {
+						uint start = cast(uint)hexdec(matches[1]);
+						uint end = start + cast(uint)hexdec(matches[2]);
+						texts[start] = TextSearcher.Result(start, end, stripslashes(matches[3]));
+					}
 				}
 			}
 		}
