@@ -1,2 +1,2 @@
 @echo off
-dmd dokan.d -run ramfs
+dmd -debug -g dokan.d -run ramfs
