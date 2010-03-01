@@ -18,14 +18,14 @@ class DokanRamFS : Dokan {
 		FILETIME CreationTime;
 		FILETIME LastAccessTime;
 		FILETIME LastWriteTime;
-		wchar[] name;
+		wstring name;
 
 		static ulong last_id = 0;
 		ulong id;
 		bool is_root() { return parent is null; }
 		bool is_directory;
 		Node parent;
-		Node[wchar[]] childs;
+		Node[wstring] childs;
 		Stream data;
 		long _length;
 		
@@ -40,13 +40,13 @@ class DokanRamFS : Dokan {
 			return is_directory ? 16 : 128;
 		}
 		
-		this(Node parent = null, wchar[] name = "", bool is_directory = false) {
+		this(Node parent = null, wstring name = "", bool is_directory = false) {
 			this.parent = parent;
 			this.id = ++last_id;
 			this.is_directory = is_directory;
 			if (this.is_root) this.is_directory = true;
 			if (parent !is null) {
-				this.name = name.dup;
+				this.name = cast(wstring)name.dup;
 				parent.childs[this.name] = this;
 			}
 			SYSTEMTIME time;
@@ -63,11 +63,11 @@ class DokanRamFS : Dokan {
 			SystemTimeToFileTime(&time, &LastWriteTime);
 		}
 		
-		static int find(wchar[] s, wchar v) {
+		static int find(wstring s, wchar v) {
 			foreach (k, c; s) if (v == c) return k; return -1;
 		}
 		
-		Node getChild(wchar[] name, bool create = false) {
+		Node getChild(wstring name, bool create = false) {
 			if (!name.length || (name == ".")) return this;
 			if (name == "..") return parent;
 			if ((name in childs) is null) {
@@ -77,7 +77,7 @@ class DokanRamFS : Dokan {
 			return childs[name];
 		}
 		
-		Node getPath(wchar[] path, bool create = false) {
+		Node getPath(wstring path, bool create = false) {
 			if (!path.length) return this;
 			Node current = this;
 			int separator = find(path, cast(dchar)'\\');
@@ -92,7 +92,7 @@ class DokanRamFS : Dokan {
 			return current;
 		}
 		
-		Node opIndex(wchar[] path) { return getPath(path); }
+		Node opIndex(wstring path) { return getPath(path); }
 		
 		int opApply(int delegate(ref Node) dg) {  
 			int result = 0;
@@ -102,12 +102,12 @@ class DokanRamFS : Dokan {
 			}
 			return result;
 		}
-		wchar[] path() {
+		wstring path() {
 			if (parent is null) return name;
 			return parent.path ~ "\\" ~ name;
 		}
 		
-		char[] toString() { return toUTF8(path); }
+		string toString() { return toUTF8(path); }
 	}
 	
 	class NodeHandle {
@@ -151,7 +151,7 @@ class DokanRamFS : Dokan {
 	//   You should set TRUE on DokanFileInfo->IsDirectory when file is a directory.
 	//   When CreationDisposition is CREATE_ALWAYS or OPEN_ALWAYS and a file already exists,
 	//   you should return ERROR_ALREADY_EXISTS(183) (not negative value)
-	int CreateFile(wchar[] FileName, uint DesiredAccess, uint ShareMode, uint CreationDisposition, uint FlagsAndAttributes, DOKAN_FILE_INFO* DokanFileInfo) {
+	int CreateFile(wstring FileName, uint DesiredAccess, uint ShareMode, uint CreationDisposition, uint FlagsAndAttributes, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) {
 			writefln("-------------------------------------");
 			writefln("CreateFile (FileName:'%s', DesiredAccess:%08X, SharedMode:%08X, CreationDisposition:%08X, FlagsAndAttributes:%08X)", FileName, DesiredAccess, ShareMode, CreationDisposition, FlagsAndAttributes);
@@ -171,7 +171,7 @@ class DokanRamFS : Dokan {
 	}
 
 	// When FileInfo->DeleteOnClose is true, you must delete the file in Cleanup.
-	int Cleanup(wchar[] FileName, DOKAN_FILE_INFO* DokanFileInfo) {
+	int Cleanup(wstring FileName, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed Cleanup (FileName:'%s', DeleteOnClose:%d)", FileName, DokanFileInfo.DeleteOnClose);
 		if (DokanFileInfo.DeleteOnClose) {
 			Node node = root.getPath(FileName);
@@ -190,7 +190,7 @@ class DokanRamFS : Dokan {
 		return 0;
 	}
 
-	int ReadFile(wchar[] FileName, void* Buffer, uint NumberOfBytesToRead, out uint NumberOfBytesRead, ulong Offset, DOKAN_FILE_INFO* DokanFileInfo) {
+	int ReadFile(wstring FileName, void* Buffer, uint NumberOfBytesToRead, out uint NumberOfBytesRead, ulong Offset, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed ReadFile (FileName:'%s', NumberOfBytesToRead:%d, Offset:%d)", FileName, NumberOfBytesToRead, Offset);
 		NodeHandle handle = cast(NodeHandle)cast(void *)DokanFileInfo.Context;
 		writefln("  %08X", cast(uint)cast(void *)DokanFileInfo.Context);
@@ -200,7 +200,7 @@ class DokanRamFS : Dokan {
 		return 0;
 	}
 
-	int WriteFile(wchar[] FileName, void* Buffer, uint NumberOfBytesToWrite, out uint NumberOfBytesWritten, ulong Offset, DOKAN_FILE_INFO* DokanFileInfo) {
+	int WriteFile(wstring FileName, void* Buffer, uint NumberOfBytesToWrite, out uint NumberOfBytesWritten, ulong Offset, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed WriteFile (FileName:'%s', NumberOfBytesToWrite:%d, Offset:%d)", FileName, NumberOfBytesToWrite, Offset);
 		NodeHandle handle = cast(NodeHandle)cast(void *)DokanFileInfo.Context;
 		if ((handle is null) || !handle.Ready) return -1;
@@ -209,12 +209,12 @@ class DokanRamFS : Dokan {
 		return 0;
 	}
 
-	int OpenDirectory(wchar[] FileName, DOKAN_FILE_INFO* DokanFileInfo) {
+	int OpenDirectory(wstring FileName, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed OpenDirectory (FileName:'%s')", FileName);
 		return 0;
 	}
 
-	int CreateDirectory(wchar[] FileName, DOKAN_FILE_INFO* DokanFileInfo) {
+	int CreateDirectory(wstring FileName, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed CreateDirectory (FileName:'%s')", FileName);
 		Node node = root.getPath(FileName, true);
 		if (node !is null) {
@@ -230,14 +230,14 @@ class DokanRamFS : Dokan {
 	// -ERROR_SHARING_VIOLATION.
 	// When you return 0 (ERROR_SUCCESS), you get Cleanup with
 	// FileInfo->DeleteOnClose set TRUE, you delete the file.
-	int DeleteFile(wchar[] FileName, DOKAN_FILE_INFO* DokanFileInfo) {
+	int DeleteFile(wstring FileName, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed DeleteFile (FileName:'%s')", FileName);
 		Node node = root.getPath(FileName, false);
 		if (node is null) return -0x02; // File doesn't exists
 		return 0;
 	}
 
-	int DeleteDirectory(wchar[] FileName, DOKAN_FILE_INFO* DokanFileInfo) {
+	int DeleteDirectory(wstring FileName, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed DeleteDirectory (FileName:'%s')", FileName);
 		Node node = root.getPath(FileName, false);
 		if (node is null) return -1; // File doesn't exists
@@ -245,11 +245,11 @@ class DokanRamFS : Dokan {
 		return 0; // ERROR_SUCCESS (Can remove)
 	}
 
-	int FindFiles(wchar[] PathName, FINDCALLBACK Callback, DOKAN_FILE_INFO* DokanFileInfo) {
+	int FindFiles(wstring PathName, FINDCALLBACK Callback, DOKAN_FILE_INFO* DokanFileInfo) {
 		return FindFilesWithPattern(PathName, "*", Callback, DokanFileInfo);
 	}
 	
-	int GetFileInformation(wchar[] FileName, out BY_HANDLE_FILE_INFORMATION Buffer, DOKAN_FILE_INFO* DokanFileInfo) {
+	int GetFileInformation(wstring FileName, out BY_HANDLE_FILE_INFORMATION Buffer, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed GetFileInformation (FileName:'%s')", FileName);
 
 		NodeHandle handle = cast(NodeHandle)cast(void *)DokanFileInfo.Context;
@@ -267,7 +267,7 @@ class DokanRamFS : Dokan {
 		return 0;
 	}
 
-	int FindFilesWithPattern(wchar[] PathName, wchar[] Pattern, FINDCALLBACK Callback, DOKAN_FILE_INFO* DokanFileInfo) {
+	int FindFilesWithPattern(wstring PathName, wstring Pattern, FINDCALLBACK Callback, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed FindFilesWithPattern (PathName:'%s', Pattern:'%s')", PathName, Pattern);
 
 		Node directory = root.getPath(PathName);
@@ -276,18 +276,18 @@ class DokanRamFS : Dokan {
 		WIN32_FIND_DATAW Find;
 		
 		foreach (node; directory) {
-			copywchar(Find.FileName, node.name);
+			copywchar(Find.FileName, cast(wchar[])node.name);
 
 			debug (UnprocessedWrite) writefln("::%s", node.name);
 
-			if (!DokanIsNameInExpression(Pattern.ptr, Find.FileName.ptr, true)) continue;
+			if (!DokanIsNameInExpression(cast(wchar*)Pattern.ptr, cast(wchar*)Find.FileName.ptr, true)) continue;
 
 			Find.FileAttributes = node.FileAttributes;
 			*cast(ulong *)&Find.FileSizeLow = node.length;
 			Find.CreationTime   = node.CreationTime;
 			Find.LastAccessTime = node.LastAccessTime;
 			Find.LastWriteTime  = node.LastWriteTime;
-			copywchar(Find.AlternateFileName, node.name);
+			copywchar(Find.AlternateFileName, cast(wchar[])node.name);
 
 			Callback(&Find, DokanFileInfo);
 		}
@@ -295,7 +295,7 @@ class DokanRamFS : Dokan {
 		return 0;
 	}
 
-	int GetVolumeInformation(out wchar[] VolumeName, out uint VolumeSerialNumber, out uint MaximumComponentLength, out uint FileSystemFlags, out wchar[] FileSystemName, DOKAN_FILE_INFO* DokanFileInfo) {
+	int GetVolumeInformation(out wstring VolumeName, out uint VolumeSerialNumber, out uint MaximumComponentLength, out uint FileSystemFlags, out wstring FileSystemName, DOKAN_FILE_INFO* DokanFileInfo) {
 		VolumeName             = "TestVolume";
 		FileSystemName         = "DokanFS";
 		VolumeSerialNumber     = 0x19831116;
@@ -312,7 +312,7 @@ class DokanRamFS : Dokan {
 	}
 }
 
-int main(char[][] args) {
+int main(string[] args) {
 	scope dokan = new DokanRamFS('m');
 	return dokan.main();
 }

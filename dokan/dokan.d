@@ -64,14 +64,10 @@ extern (Windows) {
 	}
 
 	struct DOKAN_OPTIONS {
-		wchar    DriveLetter;   // drive letter to be mounted
-		ushort   ThreadCount;   // number of threads to be used
-		ubyte    DebugMode;     // ouput debug message
-		ubyte    UseStdErr;     // ouput debug message to stderr
-		ubyte    UseAltStream;  // use alternate stream
-		ubyte    UseKeepAlive;  // use auto unmount
-		ulong    GlobalContext; // FileSystem can use this variable
-		
+		wchar	DriveLetter; // drive letter to be mounted
+		ushort	ThreadCount; // number of threads to be used
+		uint 	Options;	 // combination of DOKAN_OPTIONS_*
+		ulong  	GlobalContext; // FileSystem can use this variable
 		static assert (DOKAN_OPTIONS.sizeof == 16);
 	}
 
@@ -132,7 +128,7 @@ extern (Windows) {
 	
 	static HMODULE library;
 	static this() {
-		static char[] func(char[] name) { return "*cast(void **)&" ~ name ~ " = cast(void *)GetProcAddress(library, \"" ~ name ~ "\");"; }
+		static string func(string name) { return "*cast(void **)&" ~ name ~ " = cast(void *)GetProcAddress(library, \"" ~ name ~ "\");"; }
 		library = LoadLibraryA("dokan.dll");
 		mixin(func("DokanMain"));
 		mixin(func("DokanUnmount"));
@@ -151,10 +147,10 @@ class Dokan {
 
 	extern (Windows) {
 		static Dokan opCall(DOKAN_FILE_INFO* DokanFileInfo) { return (cast(Dokan)cast(void *)DokanFileInfo.DokanOptions.GlobalContext); }
-		static const char[] check_context = "if (!DokanFileInfo.DokanOptions.GlobalContext) return -1;";
+		static const string check_context = "if (!DokanFileInfo.DokanOptions.GlobalContext) return -1;";
 
-		static char[] StaticParameter0(char[] name) { return "static int Static_" ~ name ~ "(DOKAN_FILE_INFO* DokanFileInfo) { mixin(check_context); return Dokan(DokanFileInfo)." ~ name ~ "(DokanFileInfo); }"; }
-		static char[] StaticParameter1(char[] name) { return "static int Static_" ~ name ~ "(wchar* FileName, DOKAN_FILE_INFO* DokanFileInfo) { mixin(check_context); return Dokan(DokanFileInfo)." ~ name ~ "(towchar(FileName), DokanFileInfo); }"; }
+		static string StaticParameter0(string name) { return "static int Static_" ~ name ~ "(DOKAN_FILE_INFO* DokanFileInfo) { mixin(check_context); return Dokan(DokanFileInfo)." ~ name ~ "(DokanFileInfo); }"; }
+		static string StaticParameter1(string name) { return "static int Static_" ~ name ~ "(wchar* FileName, DOKAN_FILE_INFO* DokanFileInfo) { mixin(check_context); return Dokan(DokanFileInfo)." ~ name ~ "(towchar(FileName), DokanFileInfo); }"; }
 		
 		static int Static_CreateFile(wchar* FileName, uint DesiredAccess, uint ShareMode, uint CreationDisposition, uint FlagsAndAttributes, DOKAN_FILE_INFO* DokanFileInfo) { mixin(check_context); return Dokan(DokanFileInfo).CreateFile(towchar(FileName), DesiredAccess, ShareMode, CreationDisposition, FlagsAndAttributes, DokanFileInfo); }
 		static int Static_GetDiskFreeSpace(ulong* FreeBytesAvailable, ulong* TotalNumberOfBytes, ulong* TotalNumberOfFreeBytes, DOKAN_FILE_INFO* DokanFileInfo) { mixin(check_context); return Dokan(DokanFileInfo).GetDiskFreeSpace(*FreeBytesAvailable, *TotalNumberOfBytes, *TotalNumberOfFreeBytes, DokanFileInfo); }
@@ -235,8 +231,8 @@ class Dokan {
 	
 	int GetVolumeInformation(out wchar[] VolumeName, out uint VolumeSerialNumber, out uint MaximumComponentLength, out uint FileSystemFlags, out wchar[] FileSystemName, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed GetVolumeInformation");
-		VolumeName             = "DokanVolume";
-		FileSystemName         = "DokanFS";
+		VolumeName             = cast(wchar[])"DokanVolume";
+		FileSystemName         = cast(wchar[])"DokanFS";
 		VolumeSerialNumber     = 0x_00_00_00_00;
 		FileSystemFlags        = 0x_00_00_00_00;
 		MaximumComponentLength = 255;
