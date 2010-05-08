@@ -86,7 +86,7 @@ class Prime {
 		foreach (value; values) {
 			auto factors = factorize(value);
 			foreach (value, count; factors) {
-				if (count > finalfactors[value]) finalfactors[value] = count;
+				if (factors[value] > finalfactors[value]) finalfactors[value] = factors[value];
 			}
 		}
 		return finalfactors.value;
@@ -97,7 +97,7 @@ class Prime {
 		foreach (value; values[1..$]) {
 			auto factors = factorize(value);
 			foreach (value, count; finalfactors) {
-				if (factors[value] < count) finalfactors[value] = count;
+				if (factors[value] < finalfactors[value]) finalfactors[value] = factors[value];
 			}
 		}
 		return finalfactors.value;
