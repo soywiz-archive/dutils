@@ -330,10 +330,10 @@ class Dokan {
 		DOKAN_OPTIONS    dokanOptions;
 		dokanOptions.DriveLetter = DriveLetter;
 		dokanOptions.ThreadCount = 0;
-		dokanOptions.DebugMode = DebugMode;
-		dokanOptions.UseStdErr = DebugMode;
-		dokanOptions.UseAltStream = 0;
-		dokanOptions.UseKeepAlive = 1;
+		//dokanOptions.DebugMode = DebugMode;
+		//dokanOptions.UseStdErr = DebugMode;
+		//dokanOptions.UseAltStream = 0;
+		//dokanOptions.UseKeepAlive = 1;
 		dokanOptions.GlobalContext = cast(ulong)cast(void *)this;
 		//DokanUnmount(DriveLetter);
 		int status = DokanMain(&dokanOptions, &dokanOperations);
