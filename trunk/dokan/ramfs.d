@@ -245,10 +245,6 @@ class DokanRamFS : Dokan {
 		return 0; // ERROR_SUCCESS (Can remove)
 	}
 
-	int FindFiles(wstring PathName, FINDCALLBACK Callback, DOKAN_FILE_INFO* DokanFileInfo) {
-		return FindFilesWithPattern(PathName, "*", Callback, DokanFileInfo);
-	}
-	
 	int GetFileInformation(wstring FileName, out BY_HANDLE_FILE_INFORMATION Buffer, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed GetFileInformation (FileName:'%s')", FileName);
 
@@ -276,20 +272,24 @@ class DokanRamFS : Dokan {
 		WIN32_FIND_DATAW Find;
 		
 		foreach (node; directory) {
-			copywchar(Find.FileName, cast(wchar[])node.name);
-
 			debug (UnprocessedWrite) writefln("::%s", node.name);
 
-			if (!DokanIsNameInExpression(cast(wchar*)Pattern.ptr, cast(wchar*)Find.FileName.ptr, true)) continue;
+			writefln("[0]");
+			if (!IsNameInExpression(Pattern, node.name, true)) continue;
+			writefln("[a]");
+
+			copywchar(Find.FileName, node.name);
 
 			Find.FileAttributes = node.FileAttributes;
 			*cast(ulong *)&Find.FileSizeLow = node.length;
 			Find.CreationTime   = node.CreationTime;
 			Find.LastAccessTime = node.LastAccessTime;
 			Find.LastWriteTime  = node.LastWriteTime;
-			copywchar(Find.AlternateFileName, cast(wchar[])node.name);
+			copywchar(Find.AlternateFileName, node.name);
 
+			writefln("[1]");
 			Callback(&Find, DokanFileInfo);
+			writefln("[2]");
 		}
 
 		return 0;
@@ -313,6 +313,6 @@ class DokanRamFS : Dokan {
 }
 
 int main(string[] args) {
-	scope dokan = new DokanRamFS('m');
+	scope dokan = new DokanRamFS('n');
 	return dokan.main();
 }

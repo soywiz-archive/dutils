@@ -23,17 +23,18 @@ public import std.stdio, std.stream, std.file, std.path, std.utf, std.string;
 public import std.c.windows.windows;
 
 static int strlen(wchar *s) { int c; while (*s++ != 0) c++; return c; }
-static wchar[] towchar(wchar *s) { return s[0..strlen(s)]; }
-static void copywchar(wchar[] to, wchar[] from) {
+static wstring towchar(wchar *s) { return cast(wstring)s[0..strlen(s)]; }
+static void copywchar(wchar[] to, wstring from) {
 	int len = ((to.length - 1) < from.length) ? (to.length - 1) : from.length;
-	to[0..len] = from[0..len]; to[len] = 0;
+	to[0..len] = from[0..len];
+	to[len] = 0;
 }
 
 debug = UnprocessedWrite;
 
 // Error Codes (ERROR_SUCCESS, ...): http://msdn.microsoft.com/en-us/library/ms681382(VS.85).aspx
 extern (Windows) {
-	const wchar[] DOKAN_DRIVER_NAME = "dokan.sys";
+	const wstring DOKAN_DRIVER_NAME = "dokan.sys";
 	
 	void OutputDebugStringW(wchar *);
   
@@ -68,16 +69,20 @@ extern (Windows) {
 		ushort	ThreadCount; // number of threads to be used
 		uint 	Options;	 // combination of DOKAN_OPTIONS_*
 		ulong  	GlobalContext; // FileSystem can use this variable
-		static assert (DOKAN_OPTIONS.sizeof == 16);
+		static assert (this.sizeof == 16);
 	}
 
 	struct DOKAN_FILE_INFO {
 		ulong  Context;       // FileSystem can use this variable
 		ulong  DokanContext;  // Don't touch this
+		DOKAN_OPTIONS* DokanOptions;
 		uint   ProcessId;     // process id for the thread that originally requested a given I/O operation
 		ubyte  IsDirectory;   // requesting a directory file
 		ubyte  DeleteOnClose; // Delete on when "cleanup" is called
-		DOKAN_OPTIONS* DokanOptions;
+		ubyte  PagingIo;	// Read or write is paging IO.
+		ubyte  SynchronousIo;  // Read or write is synchronous IO.
+		ubyte  Nocache;
+		ubyte  WriteToEndOfFile; //  If true, write to the current end of file instead of Offset parameter.
 		
 		static assert (DOKAN_FILE_INFO.sizeof == 32);
 	}
@@ -120,24 +125,29 @@ extern (Windows) {
 		DOKAN_MOUNT_ERROR			= -5, // Can't assign a drive letter
 	}
 
-	int  function(DOKAN_OPTIONS* DokanOptions, DOKAN_OPERATIONS* DokanOperations) DokanMain;
-	bool function(wchar DriveLetter) DokanUnmount;
-	bool function(wchar* Expression, wchar* Name, bool IgnoreCase) DokanIsNameInExpression;
-	uint function() DokanVersion;
-	uint function() DokanDriverVersion;
-	
-	static HMODULE library;
-	static this() {
-		static string func(string name) { return "*cast(void **)&" ~ name ~ " = cast(void *)GetProcAddress(library, \"" ~ name ~ "\");"; }
-		library = LoadLibraryA("dokan.dll");
-		mixin(func("DokanMain"));
-		mixin(func("DokanUnmount"));
-		mixin(func("DokanIsNameInExpression"));
-		mixin(func("DokanVersion"));
-		mixin(func("DokanDriverVersion"));
-	}
-	static ~this() {
-		FreeLibrary(library);
+	private {
+		int  function(DOKAN_OPTIONS* DokanOptions, DOKAN_OPERATIONS* DokanOperations) DokanMain;
+		bool function(wchar DriveLetter) DokanUnmount;
+		bool function(wchar* Expression, wchar* Name, bool IgnoreCase) DokanIsNameInExpression;
+		uint function() DokanVersion;
+		uint function() DokanDriverVersion;
+
+		bool function(uint Timeout, DOKAN_FILE_INFO* DokanFileInfo) DokanResetTimeout;
+
+		static HMODULE library;
+		static this() {
+			static string func(string name) { return "*cast(void **)&" ~ name ~ " = cast(void *)GetProcAddress(library, \"" ~ name ~ "\");"; }
+			library = LoadLibraryA("dokan.dll");
+			mixin(func("DokanMain"));
+			mixin(func("DokanUnmount"));
+			mixin(func("DokanIsNameInExpression"));
+			mixin(func("DokanVersion"));
+			mixin(func("DokanDriverVersion"));
+			mixin(func("DokanResetTimeout"));
+		}
+		static ~this() {
+			FreeLibrary(library);
+		}
 	}
 }
 
@@ -147,25 +157,164 @@ class Dokan {
 
 	extern (Windows) {
 		static Dokan opCall(DOKAN_FILE_INFO* DokanFileInfo) { return (cast(Dokan)cast(void *)DokanFileInfo.DokanOptions.GlobalContext); }
-		static const string check_context = "if (!DokanFileInfo.DokanOptions.GlobalContext) return -1;";
+		static const string check_context = "if (!DokanFileInfo || !DokanFileInfo.DokanOptions || !DokanFileInfo.DokanOptions.GlobalContext) return -1;";
+		static string InitFunction(string func) { return "writefln(\"InitFunction:%s\", \"" ~ func ~ "\");"; }
 
-		static string StaticParameter0(string name) { return "static int Static_" ~ name ~ "(DOKAN_FILE_INFO* DokanFileInfo) { mixin(check_context); return Dokan(DokanFileInfo)." ~ name ~ "(DokanFileInfo); }"; }
-		static string StaticParameter1(string name) { return "static int Static_" ~ name ~ "(wchar* FileName, DOKAN_FILE_INFO* DokanFileInfo) { mixin(check_context); return Dokan(DokanFileInfo)." ~ name ~ "(towchar(FileName), DokanFileInfo); }"; }
+		static string StaticParameter0(string name) { return "static int Static_" ~ name ~ "(DOKAN_FILE_INFO* DokanFileInfo) { try { mixin(InitFunction(\"" ~ name ~ "\")); mixin(check_context); return Dokan(DokanFileInfo)." ~ name ~ "(DokanFileInfo); } catch (Exception e) { writefln(\"ERROR: %s\", e); return -1; } }"; }
+		static string StaticParameter1(string name) { return "static int Static_" ~ name ~ "(wchar* FileName, DOKAN_FILE_INFO* DokanFileInfo) { try { mixin(InitFunction(\"" ~ name ~ "\")); mixin(check_context); return Dokan(DokanFileInfo)." ~ name ~ "(towchar(FileName), DokanFileInfo); } catch (Exception e) { writefln(\"ERROR: %s\", e); return -1; } }"; }
 		
-		static int Static_CreateFile(wchar* FileName, uint DesiredAccess, uint ShareMode, uint CreationDisposition, uint FlagsAndAttributes, DOKAN_FILE_INFO* DokanFileInfo) { mixin(check_context); return Dokan(DokanFileInfo).CreateFile(towchar(FileName), DesiredAccess, ShareMode, CreationDisposition, FlagsAndAttributes, DokanFileInfo); }
-		static int Static_GetDiskFreeSpace(ulong* FreeBytesAvailable, ulong* TotalNumberOfBytes, ulong* TotalNumberOfFreeBytes, DOKAN_FILE_INFO* DokanFileInfo) { mixin(check_context); return Dokan(DokanFileInfo).GetDiskFreeSpace(*FreeBytesAvailable, *TotalNumberOfBytes, *TotalNumberOfFreeBytes, DokanFileInfo); }
-		static int Static_GetVolumeInformation(wchar* VolumeNameBuffer, uint VolumeNameSize, uint* VolumeSerialNumber, uint* MaximumComponentLength, uint *FileSystemFlags, wchar* FileSystemNameBuffer, uint FileSystemNameSize, DOKAN_FILE_INFO* DokanFileInfo) { mixin(check_context); wchar[] VolumeName, FileSystemName; auto retval = Dokan(DokanFileInfo).GetVolumeInformation(VolumeName, *VolumeSerialNumber, *MaximumComponentLength, *FileSystemFlags, FileSystemName, DokanFileInfo); copywchar(VolumeNameBuffer[0..VolumeNameSize], VolumeName); copywchar(FileSystemNameBuffer[0..FileSystemNameSize], FileSystemName); return retval; }
-		static int Static_FindFiles(wchar* PathName, FINDCALLBACK Callback, DOKAN_FILE_INFO* DokanFileInfo) { mixin(check_context); return Dokan(DokanFileInfo).FindFiles(towchar(PathName), Callback, DokanFileInfo); }
-		static int Static_FindFilesWithPattern(wchar* PathName, wchar* Pattern, FINDCALLBACK Callback, DOKAN_FILE_INFO* DokanFileInfo) { mixin(check_context); return Dokan(DokanFileInfo).FindFilesWithPattern(towchar(PathName), towchar(Pattern), Callback, DokanFileInfo); }
-		static int Static_LockFile(wchar* FileName, ulong ByteOffset, ulong Length, DOKAN_FILE_INFO* DokanFileInfo) { mixin(check_context); return Dokan(DokanFileInfo).LockFile(towchar(FileName), ByteOffset, Length, DokanFileInfo); }
-		static int Static_UnlockFile(wchar* FileName, ulong ByteOffset, ulong Length, DOKAN_FILE_INFO* DokanFileInfo) { mixin(check_context); return Dokan(DokanFileInfo).UnlockFile(towchar(FileName), ByteOffset, Length, DokanFileInfo); }
-		static int Static_GetFileInformation(wchar* FileName, BY_HANDLE_FILE_INFORMATION* Buffer, DOKAN_FILE_INFO* DokanFileInfo) { mixin(check_context); return Dokan(DokanFileInfo).GetFileInformation(towchar(FileName), *Buffer, DokanFileInfo); }
-		static int Static_SetFileAttributes(wchar* FileName, uint FileAttributes, DOKAN_FILE_INFO* DokanFileInfo) { mixin(check_context); return Dokan(DokanFileInfo).SetFileAttributes(towchar(FileName), FileAttributes, DokanFileInfo); }
-		static int Static_SetFileTime(wchar* FileName, FILETIME* CreationTime, FILETIME* LastAccessTime, FILETIME* LastWriteTime, DOKAN_FILE_INFO* DokanFileInfo) { mixin(check_context); return Dokan(DokanFileInfo).SetFileTime(towchar(FileName), *CreationTime, *LastAccessTime, *LastWriteTime, DokanFileInfo); }
-		static int Static_MoveFile(wchar* ExistingFileName, wchar* NewFileName, bool ReplaceExisting, DOKAN_FILE_INFO* DokanFileInfo) { mixin(check_context); return Dokan(DokanFileInfo).MoveFile( towchar(ExistingFileName), towchar(NewFileName), ReplaceExisting, DokanFileInfo); }
-		static int Static_SetEndOfFile(wchar* FileName, ulong Length, DOKAN_FILE_INFO* DokanFileInfo) { mixin(check_context); return Dokan(DokanFileInfo).SetEndOfFile(towchar(FileName), Length, DokanFileInfo); }
-		static int Static_ReadFile(wchar* FileName, void* Buffer, uint NumberOfBytesToRead, uint* NumberOfBytesRead, ulong Offset, DOKAN_FILE_INFO* DokanFileInfo) { mixin(check_context); return Dokan(DokanFileInfo).ReadFile(towchar(FileName), Buffer, NumberOfBytesToRead, *NumberOfBytesRead, Offset, DokanFileInfo);			 }
-		static int Static_WriteFile(wchar* FileName, void* Buffer, uint NumberOfBytesToWrite, uint* NumberOfBytesWritten, ulong Offset, DOKAN_FILE_INFO* DokanFileInfo) { mixin(check_context); return Dokan(DokanFileInfo).WriteFile(towchar(FileName), Buffer, NumberOfBytesToWrite, *NumberOfBytesWritten, Offset, DokanFileInfo);			 }
+		static int Static_CreateFile(wchar* FileName, uint DesiredAccess, uint ShareMode, uint CreationDisposition, uint FlagsAndAttributes, DOKAN_FILE_INFO* DokanFileInfo) {
+			try {
+				mixin(InitFunction("CreateFile"));
+				mixin(check_context);
+				return Dokan(DokanFileInfo).CreateFile(towchar(FileName), DesiredAccess, ShareMode, CreationDisposition, FlagsAndAttributes, DokanFileInfo);
+			} catch (Exception e) {
+				writefln("ERROR: %s", e);
+				return -1;
+			}
+		}
+		static int Static_GetDiskFreeSpace(ulong* FreeBytesAvailable, ulong* TotalNumberOfBytes, ulong* TotalNumberOfFreeBytes, DOKAN_FILE_INFO* DokanFileInfo) {
+			try {
+				mixin(InitFunction("GetDiskFreeSpace"));
+				writefln("%p, %p, %p, %p", FreeBytesAvailable, TotalNumberOfBytes, TotalNumberOfFreeBytes, DokanFileInfo);
+				*FreeBytesAvailable = 512 * 1024 * 1024;
+				if (FreeBytesAvailable is null) return -1;
+				if (TotalNumberOfBytes is null) return -1;
+				if (TotalNumberOfFreeBytes is null) return -1;
+				if (DokanFileInfo is null) return -1;
+				
+				mixin(check_context);
+				return Dokan(DokanFileInfo).GetDiskFreeSpace(*FreeBytesAvailable, *TotalNumberOfBytes, *TotalNumberOfFreeBytes, DokanFileInfo);
+			} catch (Exception e) {
+				writefln("ERROR: %s", e); 
+				return -1;
+			}
+		}
+		static int Static_GetVolumeInformation(wchar* VolumeNameBuffer, uint VolumeNameSize, uint* VolumeSerialNumber, uint* MaximumComponentLength, uint *FileSystemFlags, wchar* FileSystemNameBuffer, uint FileSystemNameSize, DOKAN_FILE_INFO* DokanFileInfo) {
+			try {
+				mixin(InitFunction("GetVolumeInformation"));
+				mixin(check_context);
+				wstring VolumeName, FileSystemName;
+				auto retval = Dokan(DokanFileInfo).GetVolumeInformation(VolumeName, *VolumeSerialNumber, *MaximumComponentLength, *FileSystemFlags, FileSystemName, DokanFileInfo);
+				copywchar(VolumeNameBuffer[0..VolumeNameSize], VolumeName);
+				copywchar(FileSystemNameBuffer[0..FileSystemNameSize], FileSystemName);
+				return retval;
+			} catch (Exception e) {
+				writefln("ERROR: %s", e); 
+				return -1;
+			}
+		}
+		static int Static_FindFiles(wchar* PathName, FINDCALLBACK Callback, DOKAN_FILE_INFO* DokanFileInfo) {
+			try {
+				mixin(InitFunction("FindFiles"));
+				mixin(check_context);
+				//return Dokan(DokanFileInfo).FindFiles(towchar(PathName), Callback, DokanFileInfo);
+				return Dokan(DokanFileInfo).FindFilesWithPattern(towchar(PathName), "*", Callback, DokanFileInfo);
+			} catch (Exception e) {
+				writefln("ERROR: %s", e); 
+				return -1;
+			}
+		}
+		static int Static_FindFilesWithPattern(wchar* PathName, wchar* Pattern, FINDCALLBACK Callback, DOKAN_FILE_INFO* DokanFileInfo) {
+			try {
+				mixin(InitFunction("FindFilesWithPattern"));
+				mixin(check_context);
+				return Dokan(DokanFileInfo).FindFilesWithPattern(towchar(PathName), towchar(Pattern), Callback, DokanFileInfo);
+			} catch (Exception e) {
+				writefln("ERROR: %s", e); 
+				return -1;
+			}
+		}
+		static int Static_LockFile(wchar* FileName, ulong ByteOffset, ulong Length, DOKAN_FILE_INFO* DokanFileInfo) {
+			try {
+				mixin(InitFunction("LockFile"));
+				mixin(check_context);
+				return Dokan(DokanFileInfo).LockFile(towchar(FileName), ByteOffset, Length, DokanFileInfo);
+			} catch (Exception e) {
+				writefln("ERROR: %s", e); 
+				return -1;
+			}
+		}
+		static int Static_UnlockFile(wchar* FileName, ulong ByteOffset, ulong Length, DOKAN_FILE_INFO* DokanFileInfo) {
+			try {
+				mixin(InitFunction("UnlockFile"));
+				mixin(check_context);
+				return Dokan(DokanFileInfo).UnlockFile(towchar(FileName), ByteOffset, Length, DokanFileInfo);
+			} catch (Exception e) {
+				writefln("ERROR: %s", e); 
+				return -1;
+			}
+		}
+		static int Static_GetFileInformation(wchar* FileName, BY_HANDLE_FILE_INFORMATION* Buffer, DOKAN_FILE_INFO* DokanFileInfo) {
+			try {
+				mixin(InitFunction("GetFileInformation"));
+				mixin(check_context);
+				return Dokan(DokanFileInfo).GetFileInformation(towchar(FileName), *Buffer, DokanFileInfo);
+			} catch (Exception e) {
+				writefln("ERROR: %s", e); 
+				return -1;
+			}
+		}
+		static int Static_SetFileAttributes(wchar* FileName, uint FileAttributes, DOKAN_FILE_INFO* DokanFileInfo) {
+			try {
+				mixin(InitFunction("SetFileAttributes"));
+				mixin(check_context);
+				return Dokan(DokanFileInfo).SetFileAttributes(towchar(FileName), FileAttributes, DokanFileInfo);
+			} catch (Exception e) {
+				writefln("ERROR: %s", e); 
+				return -1;
+			}
+		}
+		static int Static_SetFileTime(wchar* FileName, FILETIME* CreationTime, FILETIME* LastAccessTime, FILETIME* LastWriteTime, DOKAN_FILE_INFO* DokanFileInfo) {
+			try {
+				mixin(InitFunction("SetFileTime"));
+				mixin(check_context);
+				return Dokan(DokanFileInfo).SetFileTime(towchar(FileName), *CreationTime, *LastAccessTime, *LastWriteTime, DokanFileInfo);
+			} catch (Exception e) {
+				writefln("ERROR: %s", e); 
+				return -1;
+			}
+		}
+		static int Static_MoveFile(wchar* ExistingFileName, wchar* NewFileName, bool ReplaceExisting, DOKAN_FILE_INFO* DokanFileInfo) {
+			try {
+				mixin(InitFunction("MoveFile"));
+				mixin(check_context);
+				return Dokan(DokanFileInfo).MoveFile( towchar(ExistingFileName), towchar(NewFileName), ReplaceExisting, DokanFileInfo);
+			} catch (Exception e) {
+				writefln("ERROR: %s", e); 
+				return -1;
+			}
+		}
+		static int Static_SetEndOfFile(wchar* FileName, ulong Length, DOKAN_FILE_INFO* DokanFileInfo) {
+			try {
+				mixin(InitFunction("SetEndOfFile"));
+				mixin(check_context);
+				return Dokan(DokanFileInfo).SetEndOfFile(towchar(FileName), Length, DokanFileInfo);
+			} catch (Exception e) {
+				writefln("ERROR: %s", e); 
+				return -1;
+			}
+		}
+		static int Static_ReadFile(wchar* FileName, void* Buffer, uint NumberOfBytesToRead, uint* NumberOfBytesRead, ulong Offset, DOKAN_FILE_INFO* DokanFileInfo) {
+			try {
+				mixin(InitFunction("ReadFile"));
+				mixin(check_context);
+				return Dokan(DokanFileInfo).ReadFile(towchar(FileName), Buffer, NumberOfBytesToRead, *NumberOfBytesRead, Offset, DokanFileInfo);
+			} catch (Exception e) {
+				writefln("ERROR: %s", e); 
+				return -1;
+			}
+		}
+		static int Static_WriteFile(wchar* FileName, void* Buffer, uint NumberOfBytesToWrite, uint* NumberOfBytesWritten, ulong Offset, DOKAN_FILE_INFO* DokanFileInfo) {
+			try {
+				mixin(InitFunction("WriteFile"));
+				mixin(check_context);
+				return Dokan(DokanFileInfo).WriteFile(towchar(FileName), Buffer, NumberOfBytesToWrite, *NumberOfBytesWritten, Offset, DokanFileInfo);
+			} catch (Exception e) {
+				writefln("ERROR: %s", e); 
+				return -1;
+			}
+		}
 
 		mixin(StaticParameter1("FlushFileBuffers"));
 		mixin(StaticParameter1("DeleteFile"));
@@ -177,62 +326,62 @@ class Dokan {
 		mixin(StaticParameter0("Unmount"));
 	}
 
-	int ReadFile(wchar[] FileName, void* Buffer, uint NumberOfBytesToRead, out uint NumberOfBytesRead, ulong Offset, DOKAN_FILE_INFO* DokanFileInfo) {
+	int ReadFile(wstring FileName, void* Buffer, uint NumberOfBytesToRead, out uint NumberOfBytesRead, ulong Offset, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed ReadFile (FileName:'%s', NumberOfBytesToRead:%d, Offset:%d)", FileName, NumberOfBytesToRead, Offset);
 		NumberOfBytesRead = NumberOfBytesToRead;
 		return 0;
 	}
 
-	int WriteFile(wchar[] FileName, void* Buffer, uint NumberOfBytesToWrite, out uint NumberOfBytesWritten, ulong Offset, DOKAN_FILE_INFO* DokanFileInfo) {
+	int WriteFile(wstring FileName, void* Buffer, uint NumberOfBytesToWrite, out uint NumberOfBytesWritten, ulong Offset, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed WriteFile (FileName:'%s', NumberOfBytesToWrite:%d, Offset:%d)", FileName, NumberOfBytesToWrite, Offset);
 		NumberOfBytesWritten = NumberOfBytesToWrite;
 		return 0;
 	}
 
-	int FlushFileBuffers(wchar[] FileName, DOKAN_FILE_INFO* DokanFileInfo) {
+	int FlushFileBuffers(wstring FileName, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed FlushFileBuffers (FileName:'%s')", FileName);
 		return 0;
 	}
 
-	int SetEndOfFile(wchar[] FileName, ulong Length, DOKAN_FILE_INFO* DokanFileInfo) {
+	int SetEndOfFile(wstring FileName, ulong Length, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed SetEndOfFile (FileName:'%s', Length:%d)", FileName, Length);
 		return 0;
 	}
 	
-	int MoveFile(wchar[] ExistingFileName, wchar[] NewFileName, bool ReplaceExisting, DOKAN_FILE_INFO* DokanFileInfo) {
+	int MoveFile(wstring ExistingFileName, wstring NewFileName, bool ReplaceExisting, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed MoveFile (ExistingFileName:'%s', NewFileName:'%s', ReplaceExisting:%d)", ExistingFileName, NewFileName, ReplaceExisting);
 		return 0;
 	}
 	
-	int SetFileAttributes(wchar[] FileName, uint FileAttributes, DOKAN_FILE_INFO* DokanFileInfo) {
+	int SetFileAttributes(wstring FileName, uint FileAttributes, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed SetFileAttributes (FileName:'%s', FileAttributes:%08X)", FileName, FileAttributes);
 		return 0;
 	}
 	
-	int SetFileTime(wchar[] FileName, in FILETIME CreationTime, in FILETIME LastAccessTime, in FILETIME LastWriteTime, DOKAN_FILE_INFO* DokanFileInfo) {
+	int SetFileTime(wstring FileName, in FILETIME CreationTime, in FILETIME LastAccessTime, in FILETIME LastWriteTime, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed SetFileTime (FileName:'%s', CreationTime:'%s', LastAccessTime:'%s', LastWriteTime:'%s')", FileName, cast(int)cast(void *)&CreationTime, cast(int)cast(void *)&LastAccessTime, cast(int)cast(void *)&LastWriteTime);
 		return 0;
 	}
 
-	int LockFile(wchar[] FileName, ulong ByteOffset, ulong Length, DOKAN_FILE_INFO* DokanFileInfo) {
+	int LockFile(wstring FileName, ulong ByteOffset, ulong Length, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed LockFile (FileName:'%s', ByteOffset:%d, Length:%d)", FileName, ByteOffset, Length);
 		return 0;
 	}
 
-	int UnlockFile(wchar[] FileName, ulong ByteOffset, ulong Length, DOKAN_FILE_INFO* DokanFileInfo) {
+	int UnlockFile(wstring FileName, ulong ByteOffset, ulong Length, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed UnlockFile (FileName:'%s', ByteOffset:%d, Length:%d)", FileName, ByteOffset, Length);
 		return 0;
 	}
 
-	int GetFileInformation(wchar[] FileName, out BY_HANDLE_FILE_INFORMATION Buffer, DOKAN_FILE_INFO* DokanFileInfo) {
+	int GetFileInformation(wstring FileName, out BY_HANDLE_FILE_INFORMATION Buffer, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed GetFileInformation (FileName:'%s')", FileName);
 		return 0;
 	}
 	
-	int GetVolumeInformation(out wchar[] VolumeName, out uint VolumeSerialNumber, out uint MaximumComponentLength, out uint FileSystemFlags, out wchar[] FileSystemName, DOKAN_FILE_INFO* DokanFileInfo) {
+	int GetVolumeInformation(out wstring VolumeName, out uint VolumeSerialNumber, out uint MaximumComponentLength, out uint FileSystemFlags, out wstring FileSystemName, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed GetVolumeInformation");
-		VolumeName             = cast(wchar[])"DokanVolume";
-		FileSystemName         = cast(wchar[])"DokanFS";
+		VolumeName             = cast(wstring)"DokanVolume";
+		FileSystemName         = cast(wstring)"DokanFS";
 		VolumeSerialNumber     = 0x_00_00_00_00;
 		FileSystemFlags        = 0x_00_00_00_00;
 		MaximumComponentLength = 255;
@@ -247,47 +396,47 @@ class Dokan {
 		return 0;
 	}
 
-	int FindFiles(wchar[] PathName, FINDCALLBACK Callback, DOKAN_FILE_INFO* DokanFileInfo) {
+	/*int FindFiles(wstring PathName, FINDCALLBACK Callback, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed FindFiles (PathName:'%s')", PathName);
 		return 0;
-	}
+	}*/
 
-	int FindFilesWithPattern(wchar[] PathName, wchar[] Pattern, FINDCALLBACK Callback, DOKAN_FILE_INFO* DokanFileInfo) {
+	int FindFilesWithPattern(wstring PathName, wstring Pattern, FINDCALLBACK Callback, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed FindFilesWithPattern (PathName:'%s', Pattern:'%s')", PathName, Pattern);
 		return 0;
 	}
 
-	int CreateFile(wchar[] FileName, uint DesiredAccess, uint ShareMode, uint CreationDisposition, uint FlagsAndAttributes, DOKAN_FILE_INFO* DokanFileInfo) {
+	int CreateFile(wstring FileName, uint DesiredAccess, uint ShareMode, uint CreationDisposition, uint FlagsAndAttributes, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed CreateFile (FileName:'%s', DesiredAccess:%08X, SharedMode:%08X, CreationDisposition:%08X, FlagsAndAttributes:%08X)", FileName, DesiredAccess, ShareMode, CreationDisposition, FlagsAndAttributes);
 		return 0;
 	}
 
-	int OpenDirectory(wchar[] FileName, DOKAN_FILE_INFO* DokanFileInfo) {
+	int OpenDirectory(wstring FileName, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed OpenDirectory (FileName:'%s')", FileName);
 		return 0;
 	}
 
-	int CreateDirectory(wchar[] FileName, DOKAN_FILE_INFO* DokanFileInfo) {
+	int CreateDirectory(wstring FileName, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed CreateDirectory (FileName:'%s')", FileName);
 		return 0;
 	}
 
-	int DeleteFile(wchar[] FileName, DOKAN_FILE_INFO* DokanFileInfo) {
+	int DeleteFile(wstring FileName, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed DeleteFile (FileName:'%s')", FileName);
 		return 0;
 	}
 
-	int DeleteDirectory(wchar[] FileName, DOKAN_FILE_INFO* DokanFileInfo) {
+	int DeleteDirectory(wstring FileName, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed DeleteDirectory (FileName:'%s')", FileName);
 		return 0;
 	}
 
-	int CloseFile(wchar[] FileName, DOKAN_FILE_INFO* DokanFileInfo) {
+	int CloseFile(wstring FileName, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed CloseFile (FileName:'%s')", FileName);
 		return 0;
 	}
 
-	int Cleanup(wchar[] FileName, DOKAN_FILE_INFO* DokanFileInfo) {
+	int Cleanup(wstring FileName, DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed Cleanup (FileName:'%s')", FileName);
 		return 0;
 	}
@@ -295,6 +444,33 @@ class Dokan {
 	int Unmount(DOKAN_FILE_INFO* DokanFileInfo) {
 		debug (UnprocessedWrite) writefln("!!Unprocessed Unmount");
 		return 0;
+	}
+	
+	bool IsNameInExpression(wstring Expression, wstring Name, bool IgnoreCase = true) {
+		bool match(wchar a, wchar b) {
+			if (a == '?') return true;
+			
+			return (a == b);
+			/*
+			if (IgnoreCase) {
+				return (a == b);
+			} else {
+			}
+			*/
+		}
+		if (!Name.length || !Expression.length) return true;
+		if (Expression[0] == '*') {
+			// Last *.
+			if (Expression.length == 1) return true;
+			if (Expression[1] == cast(wchar)'*') return IsNameInExpression(Expression[1..$], Name, IgnoreCase);
+			foreach (k, c; Name) {
+				if (match(Expression[1], c) && IsNameInExpression(Expression[2..$], Name[k + 1..$], IgnoreCase)) return true;
+			}
+			return false;
+		} else {
+			if (match(Expression[0], Name[0])) return false;
+			return IsNameInExpression(Expression[1..$], Name[1..$], IgnoreCase);
+		}
 	}
 
 	static DOKAN_OPERATIONS dokanOperations = {
@@ -343,7 +519,7 @@ class Dokan {
 			case DOKAN_DRIVE_LETTER_ERROR  : writefln("Bad Drive letter\n"); break;
 			case DOKAN_DRIVER_INSTALL_ERROR: writefln("Can't install driver\n"); break;
 			case DOKAN_START_ERROR         : writefln("Driver something wrong\n"); break;
-			case DOKAN_MOUNT_ERROR         : writefln("Can't assign a drive letter\n"); break;
+			case DOKAN_MOUNT_ERROR         : writefln("Can't assign a drive letter '%s'\n", dokanOptions.DriveLetter); break;
 			default: writefln("Unknown error: %d\n", status); break;
 		}
 		return status;
