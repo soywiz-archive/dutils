@@ -133,6 +133,7 @@ struct DOKAN_OPTIONS {
 	USHORT	ThreadCount;   // number of threads to be used
 	ULONG	Options;       // combination of DOKAN_OPTIONS_*
 	ULONG64	GlobalContext; // FileSystem can use this variable
+	static assert (this.sizeof == 16);
 }
 alias DOKAN_OPTIONS* PDOKAN_OPTIONS;
 
@@ -147,6 +148,7 @@ struct DOKAN_FILE_INFO {
 	UCHAR	SynchronousIo;  // Read or write is synchronous IO.
 	UCHAR	Nocache;
 	UCHAR	WriteToEndOfFile; //  If true, write to the current end of file instead of Offset parameter.
+	static assert (DOKAN_FILE_INFO.sizeof == 32);
 
 }
 alias DOKAN_FILE_INFO* PDOKAN_FILE_INFO;
