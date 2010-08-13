@@ -16,7 +16,7 @@ public class Rule {
 
     /// Does this rule consist of a single nonterminal?
     public bool oneNT() {
-        return (ruleSymbols.length == 1) && (ruleSymbols[0].kind == SymbolKind.nonterminal);
+        return (ruleSymbols.length == 1) && (ruleSymbols[0].kind == Symbol.Kind.nonterminal);
     }
 
     public string toString() {
