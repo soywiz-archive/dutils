@@ -1,0 +1,13 @@
+
+-Idsss_imports\
+-I.
+-S.\
+-IC:\dev\dmd2\windows\include\d
+-SC:\dev\dmd2\windows\lib\
+-IC:\dev\dmd2\windows\include\d
+-SC:\dev\dmd2\windows\lib
+
+-oqdsss_objs\D
+
+test.d
+-oftest

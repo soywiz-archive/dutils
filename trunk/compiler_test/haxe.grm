@@ -1,0 +1,627 @@
+!***************************************************************
+
+GOLD Grammar for Haxe (http://haxe.org) v0.2
+by Nick Sabalausky
+
+Project Homepage: http://www.dsource.org/projects/haxepred
+Author Contact:   http://www.semitwist.com/contact.html
+
+Bug reports and feature requests can be filed at the project's site, using the
+"New Ticket" link at the top. But please check the existing tickets first, in
+case it's already been reported.
+
+Licensed under The zlib/libpng License:
+-------------------------------------------
+Copyright (c) 2009 Nick Sabalausky
+
+This software is provided 'as-is', without any express or implied
+warranty. In no event will the authors be held liable for any damages
+arising from the use of this software.
+
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it
+freely, subject to the following restrictions:
+
+    1. The origin of this software must not be misrepresented; you must not
+    claim that you wrote the original software. If you use this software
+    in a product, an acknowledgment in the product documentation would be
+    appreciated but is not required.
+
+    2. Altered source versions must be plainly marked as such, and must not be
+    misrepresented as being the original software.
+
+    3. This notice may not be removed or altered from any source
+    distribution.
+-------------------------------------------
+
+Note:
+======
+This grammar does produce one shift-reduce warning (on <ThenOkStmt>). However,
+it is necessary to allow an optional semicolon after a {}-block (Just as Haxe
+allows), and it does not actually cause any problems.
+
+Limitations:
+=============
+There are a few limitations of this grammar, that are either due to
+limitations of LALR, or due to limitations of my grammar writing
+abilities. I'm not quite sure which...
+
+Limitations of this grammar, compared to actual Haxe:
+(Examples labeled "Haxe:" are only valid in real Haxe. Examples labeled "This:"
+are valid in *both* this grammar *and* regular Haxe.)
+
+1. Things that must be terminated with a semicolon:
+   1.1. Statements ending with a function literal:
+        
+        /*Haxe:*/ bar = function():Void {}
+        /*This:*/ bar = function():Void {};
+
+   1.2. Any single-statement clause of an if or if-else statement that isn't
+        surrounded by curly braces:
+        
+        /*Haxe:*/ if(test) foo = 1 else foo = 2;
+        /*This:*/ if(test) foo = 1; else foo = 2;
+
+        /*Haxe:*/ if(test) if(test2) trace("A") else trace("B") else trace("C");
+        /*This:*/ if(test) if(test2) trace("A"); else trace("B"); else trace("C");
+
+2. Things that must be surrounded by parenthesis:
+   2.1. Statements (such as if, if-else, switch, etc.), when they are used as
+        an expression.
+        
+        /*Haxe:*/ foo = if(test) 1; else 2;
+        /*This:*/ foo = ( if(test) 1; else 2; );
+
+        /*Haxe:*/ return switch(foo) {/*etc...*/};
+        /*This:*/ return ( switch(foo) {/*etc...*/} );
+
+   2.2. The expression of a so-called "unsafe cast".
+        
+        /*Haxe:*/ baz = cast 0;
+        /*This:*/ baz = cast (0);
+        
+   2.3. Empty object literals. (Note, however, that the empty object literals
+        will be parsed as a <BlockStmt> instead of an <ObjLit>, so make sure
+        your semantic-processing code handles that appropriately.)
+
+        /*Haxe:*/ buz = {};
+        /*This:*/ buz = ({}); /*OR*/ bat = {_dummy:null};
+
+3. Things that must be surrounded by curly braces:
+   3.1. All clauses of a try chain (Haxe normally allows the last one to omit
+        the braces if it's only a single statement).
+  
+        /*Haxe:*/ try func();
+        /*This:*/ try { func(); }
+
+        /*Haxe:*/ try { func(); } catch(e:Error) trace("Ow!");
+        /*This:*/ try { func(); } catch(e:Error) { trace("Ow!"); }
+
+        /*Haxe:*/ try { func(); } catch(e:Error) { trace("Ow!"); } catch(e:String) trace("Ow!");
+        /*This:*/ try { func(); } catch(e:Error) { trace("Ow!"); } catch(e:String) { trace("Ow!"); }
+
+4. Spaces (These two restrictions *can* be relaxed. See below for details):
+   4.1. The closing angle-brackets on nested type parameters must be separated
+        by spaces.
+
+        /*Haxe:*/ Array<Array<Int>>
+        /*This:*/ Array<Array<Int> >
+
+   4.2. Whitespace is not permitted within the right-shift operators.
+   
+        /*Haxe:*/ x = a > > 3; y = b > > > 3;
+        /*This:*/ x = a >> 3;  y = b >>> 3;
+
+5. Preprocessor directive support is *very* rudimentary (but that's to be
+   expected for the grammar of any language that has a preprocessor).
+   
+   If this is insufficient for your purposes, then you'll have to run your
+   source through a proper Haxe preprocessor first. You can either create your
+   own, or use HaxePreD ( http://www.dsource.org/projects/haxepred ).
+   
+   The limitations of this grammar's preprocessor directive support are as
+   follows:
+   
+   5.1. Neither parenthesis nor the '&&' and '||' operators are
+        supported on '#if' and '#elseif'.
+   
+   5.2. This grammar treats Haxe's preprocessor directives ordinary statements,
+        except that they don't need to be terminated by a semicolon, and can
+        appear inside (or outside) definitions of classes, interfaces and enums.
+        Therefore, special care must be taken when using conditional
+        compilation:
+   
+        /*Haxe:*/
+        var foo : 
+        #if flash
+          Int
+        #else
+          Float
+        #end
+        = 7;
+   
+        /*This:*/
+        #if flash
+          var foo : Int = 7;
+        #else
+          var foo : Float = 7;
+        #end
+   
+   5.3. This grammar does *not* enforce any rules on the ordering of
+        conditional compilation statements. So whatever program uses this
+        grammar to process Haxe files will have to make sure, on its own, that
+        the conditional compilation directives are ordered and nested properly
+        and don't do anything such as the following:
+   
+        /*Bad:*/
+        class Foo {
+          var i:Int;
+        #if flash
+        }
+        #end
+   
+   5.4. Preprocessor directives cannot appear before a "package" statement.
+
+IMPORTANT NOTE ABOUT COMPARE/BITWISE/SHIFT:
+--------------------------------------------
+Limitations 4.1 and 4.2 *can* be lifted if you don't mind extra work in your
+own semantic-processing code. So, if you would like to remove those two
+limitations, here is what you must do:
+
+1. Comment-out the current <LogicAndExpr>, <CmpExpr>, <BitExpr> and <ShiftExpr>
+   rules.
+2. Uncomment the "UNSAFE ALTERNATE CMP/BIT/SHIFT" section.
+3. Use GOLD to recompile the grammar (obviously).
+4. The comparison, bitwise and shift operators will now be parsed at the *same*
+   order-of-operation priority. So, in your own semantic code (ie, after you've
+   used a GOLD engine to parse), you must make sure to enforce the proper
+   compare/bitwise/shift order-of-operations yourself.
+   
+   For reference: Shift must bind tightest, bitwise binds next, and comparisons
+   must bind loosest.
+
+Abbreviations that this grammar uses:
+--------------------------------------
+This grammar uses many abbreviations for quick typing and to prevent verbosity
+from getting in the way of the grammar's ease-of-reading. These abbreviations
+might be obvious for many, but are listed here for the sake of clarity and
+completeness:
+
+  Add:   Addition
+  Anon:  Anonymous
+  Attr:  Attribute
+  Bit:   Bitwise
+  Bool:  Boolean
+  Cmp:   Comparison
+  Dec:   Decimal, base 10
+  Decl:  Declaration
+  Enum:  Enumeration
+  Expr:  Expression
+  Func:  Function
+  Hex:   Hexadecimal, base 16
+  Ident: Identifier
+  Iter:  Iterator
+  Lit:   Literal
+  Mult:  Multiplication
+  Obj:   Object
+  Op:    Operator
+  Opt:   Optional
+  Param: Parameter
+  PP:    Preprocessor
+  Prop:  Property
+  Regex: Regular Expression
+  Stmt:  Statement
+  Str:   String
+  Var:   Variable
+  
+***************************************************************!
+
+"Name"    = 'Haxe Grammar'
+"Author"  = 'Nick Sabalausky, http://www.semitwist.com/contact.html'
+"Version" = '0.2'
+"About"   = 'Grammar for Haxe (http://haxe.org), Licensed under The zlib/libpng License'
+
+"Start Symbol" = <Module>
+"Case Sensitive" = 'True'
+
+! ------------------------------------------------- Sets
+
+{ID Head}       = {Letter} + [_]
+{ID Tail}       = {AlphaNumeric} + [_]
+{String Char A} = {ANSI Printable} - ["\]
+{String Char B} = {ANSI Printable} - [''\]
+{Regex Char}    = {ANSI Printable} - [/]
+{Hex Number}    = {Number} + [ABCDEF] + [abcdef]
+
+! ------------------------------------------------- Terminals
+
+Ident    = {ID Head}{ID Tail}*
+StrLit   = '"' ( {String Char A} | '\' {ANSI Printable} )* '"' | '' ( {String Char B} | '\' {ANSI Printable} )* ''
+RegexLit = '~/' ({Regex Char} | '\' {ANSI Printable} )* '/' ('i'|'g'|'m'|'s')*
+DecLit   = ({Number}* '.'? | {Number}+ ('e'('-')?)?) {Number}+
+HexLit   = '0x' {Hex Number}+
+BoolLit  = 'true' | 'false'
+
+Comment Start = '/*'
+Comment End   = '*/'
+Comment Line  = '//'
+
+! ------------------------------------------------- Rules
+
+<Module>            ::= <Package> <TopLevelList>
+                    |   <TopLevelList>
+
+<TopLevelList>      ::= <TopLevelList> <TopLevel>
+                    |
+
+<TopLevel>          ::= <Import>
+                    |   <PP>
+                    |   <TopLevelDecl>
+
+<Package>           ::= 'package' <DotIdent> ';'
+
+<Import>            ::= 'import' <DotIdent> ';'
+
+! -------- Basics
+                    
+<Access>            ::= 'public'
+                    |   'private'
+
+<DeclAttr>          ::= 'static'
+                    |   'inline'
+                    |   'dynamic'
+                    |   'override'
+                    |   <Access>
+
+<DeclAttrList>      ::= <DeclAttrList> <DeclAttr> 
+                    |   <DeclAttr>
+
+! NOTE: Though these terms are often used interchangeably,
+!        their technical meanings are:
+!           "Parameter": Used in function declarations.
+!           "Argument":  Used in function calls.
+
+<ParamListOpt>      ::= <ParamList>
+                    |
+
+<ParamList>         ::= <Param> ',' <ParamList>
+                    |   <Param>
+
+<Param>             ::= Ident <TypeTagOpt> <VarInitOpt>
+                    |   '?' Ident <TypeTagOpt> <VarInitOpt>
+
+<DotIdent>          ::= <DotIdent> '.' Ident
+                    |   Ident
+
+<AssignOp>          ::= '='
+                    |   '+='
+                    |   '-='
+                    |   '*='
+                    |   '/='
+                    |   '%='
+                    |   '&='
+                    |   '|='
+                    |   '^='
+                    |   '<<='
+                    |   '>>='
+                    |   '>>>='
+
+<FuncLit>           ::= 'function' '(' <ParamListOpt> ')' <TypeTagOpt> <BlockStmt>
+<ArrayLit>          ::= '[' <ExprListOpt> ']'
+
+! -------- Preprocessor
+! Not actually implemented as a preprocessor though.
+! See "Limitations, 5." for more detailed information.
+
+<PP>                ::= <PPIf>
+                    |   <PPElseIf>
+                    |   <PPElse>
+                    |   <PPEnd>
+                    |   <PPError>
+
+<PPIf>              ::= '#if' Ident
+                    |   '#if' '!' Ident
+
+<PPElseIf>          ::= '#elseif' Ident
+                    |   '#elseif' '!' Ident
+
+<PPElse>            ::= '#else'
+<PPEnd>             ::= '#end'
+<PPError>           ::= '#error'
+
+! -------- Types
+
+<TypeTag>           ::= ':' <FuncType>
+
+<TypeTagOpt>        ::= <TypeTag>
+                    |
+
+<TypeList>          ::= <FuncType> ',' <TypeList>
+                    |   <TypeConstraint> ',' <TypeList>
+                    |   <FuncType>
+                    |   <TypeConstraint>
+
+<FuncType>          ::= <FuncType> '->' <Type>
+                    |   <Type>
+
+<Type>              ::= <Type> <TypeParam>
+                    |   <AnonType>
+                    |   <DotIdent>
+
+<TypeParam>         ::= '<' <TypeList> '>'
+
+<TypeParamOpt>      ::= <TypeParam>
+                    |
+
+<TypeConstraint>    ::= Ident ':' '(' <TypeList> ')'
+
+! -------- Statements
+
+<Stmt>              ::= <ThenNotOkStmt>
+                    |   <ThenOkStmt>
+
+<ThenNotOkStmt>     ::= 'untyped' <ThenNotOkStmt>
+                    |   <VarDecl>
+                    |   <IfStmt>
+                    |   <ForStmt>
+                    |   <WhileStmt>
+
+<ThenOkStmt>        ::= 'untyped' <ThenOkStmt>
+                    |   <BlockStmt>
+                    |   <BlockStmt> ';'
+                    |   <Expr> ';'
+                    |   <ReturnStmt>
+                    |   <BreakStmt>
+                    |   <ContinueStmt>
+                    |   <CaseStmt>
+                    |   <DefaultStmt>
+                    |   <SwitchStmt>
+                    |   <ThrowStmt>
+                    |   <TryStmt>
+                    |   <PP>
+
+<BlockStmt>         ::= '{' <StmtList> '}'
+
+<StmtList>          ::= <Stmt> <StmtList>
+                    |   <Stmt> ';' <StmtList>
+                    |
+
+<IfStmt>            ::= 'if' '(' <Expr> ')' <Stmt>
+                    |   'if' '(' <Expr> ')' <ThenStmt>   'else' <Stmt>
+                    |   'if' '(' <Expr> ')' <ThenOkStmt> 'else' <Stmt>
+
+<ThenStmt>          ::= 'if' '(' <Expr> ')' <ThenStmt>   'else' <ThenStmt>
+                    |   'if' '(' <Expr> ')' <ThenOkStmt> 'else' <ThenStmt>
+                    |   'if' '(' <Expr> ')' <ThenStmt>   'else' <ThenOkStmt>
+                    |   'if' '(' <Expr> ')' <ThenOkStmt> 'else' <ThenOkStmt>
+
+<ForStmt>           ::= 'for' '(' <Expr> 'in' <Expr> ')' <Stmt>
+
+<WhileStmt>         ::= 'while' '(' <Expr> ')' <Stmt>
+                    |   'do' <Stmt> 'while' '(' <Expr> ')'
+
+<ReturnStmt>        ::= 'return' ';'
+                    |   'return' <Expr> ';'
+
+<BreakStmt>         ::= 'break' ';'
+<ContinueStmt>      ::= 'continue' ';'
+
+<CaseStmt>          ::= 'case' <ExprList> ':'
+<DefaultStmt>       ::= 'default' ':'
+
+<SwitchStmt>        ::= 'switch' '(' <Expr> ')' <BlockStmt>
+
+<ThrowStmt>         ::= 'throw' <Expr> ';'
+
+<TryStmt>           ::= 'try' <BlockStmt> <CatchStmtList>
+
+<CatchStmtList>     ::= <CatchStmt> <CatchStmtList>
+                    |
+
+<CatchStmt>         ::= 'catch' '(' <Param> ')' <BlockStmt>
+
+! -------- Expressions
+
+<ExprListOpt>       ::= <ExprList>
+                    |
+
+<ExprList>          ::= <ExprList> ',' <Expr>
+                    |   <Expr>
+
+<Expr>              ::= <AssignExpr>
+
+<AssignExpr>        ::= <IterExpr> <AssignOp> <AssignExpr>
+                    |   <IterExpr>
+
+<IterExpr>          ::= <TernaryExpr> '...' <TernaryExpr>
+                    |   <TernaryExpr>
+
+<TernaryExpr>       ::= <LogicOrExpr> '?' <Expr> ':' <TernaryExpr>
+                    |   <LogicOrExpr>
+
+<LogicOrExpr>       ::= <LogicOrExpr> '||' <LogicAndExpr>
+                    |   <LogicAndExpr>
+
+<LogicAndExpr>      ::= <LogicAndExpr> '&&' <CmpExpr>
+                    |   <CmpExpr>
+
+<CmpExpr>           ::= <CmpExpr> '==' <BitExpr>
+                    |   <CmpExpr> '!=' <BitExpr>
+                    |   <CmpExpr> '>=' <BitExpr>
+                    |   <CmpExpr> '<=' <BitExpr>
+                    |   <CmpExpr> '>'  <BitExpr>
+                    |   <CmpExpr> '<'  <BitExpr>
+                    |   <BitExpr>
+
+<BitExpr>           ::= <BitExpr> '|' <ShiftExpr>
+                    |   <BitExpr> '&' <ShiftExpr>
+                    |   <BitExpr> '^' <ShiftExpr>
+                    |   <ShiftExpr>
+
+<ShiftExpr>         ::= <ShiftExpr> '<<'  <AddExpr>
+                    |   <ShiftExpr> '>>'  <AddExpr>
+                    |   <ShiftExpr> '>>>' <AddExpr>
+                    |   <AddExpr>
+
+!******************************************************************
+!UNSAFE ALTERNATE CMP/BIT/SHIFT
+!See the documentation at the top for important notes relating to this:
+
+<LogicAndExpr>      ::= <LogicAndExpr> '&&' <CmpBitShiftExpr>
+                    |   <CmpBitShiftExpr>
+
+<CmpBitShiftExpr>   ::= <CmpBitShiftExpr> '==' <AddExpr>
+                    |   <CmpBitShiftExpr> '!=' <AddExpr>
+                    |   <CmpBitShiftExpr> '>=' <AddExpr>
+                    |   <CmpBitShiftExpr> '<=' <AddExpr>
+                    |   <CmpBitShiftExpr> '>'  <AddExpr>
+                    |   <CmpBitShiftExpr> '<'  <AddExpr>
+                    |   <CmpBitShiftExpr> '|'  <AddExpr>
+                    |   <CmpBitShiftExpr> '&'  <AddExpr>
+                    |   <CmpBitShiftExpr> '^'  <AddExpr>
+                    |   <CmpBitShiftExpr> '<<'        <AddExpr>
+                    |   <CmpBitShiftExpr> '>' '>'     <AddExpr>
+                    |   <CmpBitShiftExpr> '>' '>' '>' <AddExpr>
+                    |   <AddExpr>
+
+******************************************************************!
+
+<AddExpr>           ::= <AddExpr> '+' <MultExpr>
+                    |   <AddExpr> '-' <MultExpr>
+                    |   <MultExpr>
+
+<MultExpr>          ::= <MultExpr> '*' <PrefixExpr>
+                    |   <MultExpr> '/' <PrefixExpr>
+                    |   <MultExpr> '%' <PrefixExpr>
+                    |   <PrefixExpr>
+
+<PrefixExpr>        ::= '-' <PrefixExpr>
+                    |   '--' <PrefixExpr>
+                    |   '++' <PrefixExpr>
+                    |   '!' <PrefixExpr>
+                    |   '~' <PrefixExpr>
+                    |   <NewExpr>
+                    |   <Cast>
+                    |   <SuffixExpr> 
+
+<SuffixExpr>        ::= <SuffixExpr> '(' <ExprListOpt> ')'
+                    |   <SuffixExpr> '.' Ident
+                    |   <SuffixExpr> '[' <Expr> ']'
+                    |   <SuffixExpr> '++'
+                    |   <SuffixExpr> '--'
+                    |   <Value>
+
+<Value>             ::= DecLit
+                    |   HexLit
+                    |   BoolLit
+                    |   StrLit
+                    |   RegexLit
+                    |   <FuncLit>
+                    |   <ArrayLit>
+                    |   <ObjLit>
+                    |   'null'
+                    |   Ident
+                    |   '(' <Expr> ')'
+                    |   '(' <Stmt> ')'
+
+<NewExpr>           ::= 'new' <Type> '(' <ExprListOpt> ')'
+
+<Cast>              ::= 'cast' '(' <Expr> ',' <FuncType> ')'
+                    |   'cast' '(' <Expr> ')'
+
+! -------- Declarations
+
+<TopLevelDecl>      ::= <ClassDecl>
+                    |   <InterfaceDecl>
+                    |   <EnumDecl>
+                    |   <TypedefDecl>
+
+<EnumDecl>          ::= 'enum' Ident <TypeParamOpt> '{' <EnumBody> '}'
+
+<EnumBody>          ::= <EnumValueDecl> <EnumBody>
+                    |   <EnumValueDecl>
+
+<EnumValueDecl>     ::= Ident '(' <ParamListOpt> ')' ';'
+                    |   Ident ';'
+                    |   <PP>
+
+<VarDeclList>       ::= <VarDecl> <VarDeclList>
+
+<VarDecl>           ::= <DeclAttrList> 'var' <VarDeclPartList> ';'
+                    |   'var' <VarDeclPartList> ';'
+
+<VarDeclPartList>   ::= <VarDeclPartList> ',' <VarDeclPart>
+                    |   <VarDeclPart>
+
+<VarDeclPart>       ::= Ident <PropDeclOpt> <TypeTagOpt> <VarInitOpt>
+
+<PropDecl>          ::= '(' <PropAccessor> ',' <PropAccessor> ')'
+
+<PropAccessor>      ::= Ident
+                    |   'null'
+                    |   'default'
+                    |   'dynamic'
+
+<PropDeclOpt>       ::= <PropDecl>
+                    |
+
+<VarInitOpt>        ::= <VarInit>
+                    |
+
+<VarInit>           ::= '=' <Expr>
+
+<FuncDecl>          ::= <DeclAttrList> 'function' 'new' '(' <ParamListOpt> ')' <TypeTagOpt> <BlockStmt>
+                    |   <DeclAttrList> 'function' Ident <TypeParamOpt> '(' <ParamListOpt> ')' <TypeTagOpt> <BlockStmt>
+                    |   'function' 'new' '(' <ParamListOpt> ')' <TypeTagOpt> <BlockStmt>
+                    |   'function' Ident <TypeParamOpt> '(' <ParamListOpt> ')' <TypeTagOpt> <BlockStmt>
+<FuncProtoDecl>     ::= <DeclAttrList> 'function' 'new' '(' <ParamListOpt> ')' <TypeTagOpt> ';'
+                    |   <DeclAttrList> 'function' Ident <TypeParamOpt> '(' <ParamListOpt> ')' <TypeTagOpt> ';'
+                    |   'function' 'new' '(' <ParamListOpt> ')' <TypeTagOpt> ';'
+                    |   'function' Ident <TypeParamOpt> '(' <ParamListOpt> ')' <TypeTagOpt> ';'
+
+<ClassDecl>         ::= 'class' Ident <TypeParamOpt> <InheritListOpt> '{' <ClassBody> '}'
+
+<ClassBody>         ::= <VarDecl> <ClassBody>
+                    |   <FuncDecl> <ClassBody>
+                    |   <PP> <ClassBody>
+                    |
+
+<InterfaceDecl>     ::= 'interface' <Type> <InheritListOpt> '{' <InterfaceBody> '}'
+
+<InterfaceBody>     ::= <VarDecl> <InterfaceBody>
+                    |   <FuncProtoDecl> <InterfaceBody>
+                    |   <PP> <InterfaceBody>
+                    |
+
+<InheritListOpt>    ::= <InheritList>
+                    |
+
+<InheritList>       ::= <InheritList> ',' <Inherit>
+                    |   <Inherit>
+
+<Inherit>           ::= 'extends' <Type>
+                    |   'implements' <Type>
+
+<TypedefDecl>       ::= 'typedef' Ident '=' <FuncType>
+
+<TypeExtend>        ::= '>' <FuncType> ','
+
+<AnonType>          ::= '{' '}'
+                    |   '{' <AnonTypeFieldList> '}'
+                    |   '{' <VarDeclList> '}'
+                    |   '{' <TypeExtend> '}'
+                    |   '{' <TypeExtend> <AnonTypeFieldList> '}'
+                    |   '{' <TypeExtend> <VarDeclList> '}'
+
+<AnonTypeFieldList> ::= <AnonTypeFieldList> ',' <AnonTypeField>
+                    |   <AnonTypeField>
+
+<AnonTypeField>     ::= Ident ':' <FuncType>
+
+<ObjLit>            ::= '{' <ObjLitElemList> '}'
+
+<ObjLitElemList>    ::= <ObjLitElemList> ',' <ObjLitElem>
+                    |   <ObjLitElem>
+
+<ObjLitElem>        ::= Ident ':' <Expr>
+
