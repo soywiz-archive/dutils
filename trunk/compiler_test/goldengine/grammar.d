@@ -178,16 +178,16 @@ public class Grammar {
 						} break;
 						case 'S': { // idSymbols
 							int symIdx = rec.entries[0].vInteger;
-							symbolTable[symIdx] = new Symbol(symIdx, rec.entries[1].vString, cast(SymbolKind)rec.entries[2].vInteger);
+							symbolTable[symIdx] = new Symbol(symIdx, rec.entries[1].vString, cast(Symbol.Kind)rec.entries[2].vInteger);
 							if (symIdx == mStartSymbolIdx) {
 								//this is the start symbol, set reference
 								symbolStart = symbolTable[symIdx];
 							}
-							if (symbolTable[symIdx].kind == SymbolKind.end) {
+							if (symbolTable[symIdx].kind == Symbol.Kind.end) {
 								//this is the "end of file" symbol
 								symbolEof = symbolTable[symIdx];
 							}
-							if (symbolTable[symIdx].kind == SymbolKind.error) {
+							if (symbolTable[symIdx].kind == Symbol.Kind.error) {
 								//this is the "error" symbol
 								symbolError = symbolTable[symIdx];
 							}

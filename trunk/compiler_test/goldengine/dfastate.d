@@ -32,12 +32,9 @@ package struct DFAState {
     public int findEdge(wchar c, wstring[] charsetTable, bool caseSensitive) {
         foreach (ref e; edges) {
             if (caseSensitive) {
-                if (findw(charsetTable[e.charsetIdx],c) >= 0) {
-                    return e.targetStateIdx;
-                }
+                if (findw (charsetTable[e.charsetIdx], c) >= 0) return e.targetStateIdx;
             } else {
-                if (ifindw(charsetTable[e.charsetIdx],c) >= 0)
-                    return e.targetStateIdx;
+                if (ifindw(charsetTable[e.charsetIdx],c) >= 0)return e.targetStateIdx;
             }
         }
         return -1;

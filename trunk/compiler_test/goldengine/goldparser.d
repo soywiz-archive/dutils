@@ -224,8 +224,8 @@ class GOLDParser {
                     auto token = retrieveToken();
                     mInputStack.push(token);
                     if (mCommentLevel == 0
-                        && token.parentSymbol.kind != SymbolKind.commentLine
-                        && token.parentSymbol.kind != SymbolKind.commentStart)
+                        && token.parentSymbol.kind != Symbol.Kind.commentLine
+                        && token.parentSymbol.kind != Symbol.Kind.commentStart)
                     {
                         res = GPMessage.tokenRead;
                         done = true;
@@ -235,13 +235,13 @@ class GOLDParser {
                     //and commentEnd symbols until end of comment
                     Token t = mInputStack.pop();
                     switch (t.parentSymbol.kind) {
-                        case SymbolKind.commentStart:
+                        case Symbol.Kind.commentStart:
                             mCommentLevel++;
                             break;
-                        case SymbolKind.commentEnd:
+                        case Symbol.Kind.commentEnd:
                             mCommentLevel--;
                             break;
-                        case SymbolKind.end:
+                        case Symbol.Kind.end:
                             //comment was not closed before end of file
                             res = GPMessage.commentError;
                             done = true;
@@ -253,19 +253,19 @@ class GOLDParser {
                     //a token is present and can be parsed
                     Token t = mInputStack.top();
                     switch (t.parentSymbol.kind) {
-                        case SymbolKind.whitespace:
+                        case Symbol.Kind.whitespace:
                             //whitespace is ignored
                             mInputStack.pop();
                             break;
-                        case SymbolKind.commentStart:
+                        case Symbol.Kind.commentStart:
                             mCommentLevel = 1;
                             mInputStack.pop();
                             break;
-                        case SymbolKind.commentLine:
+                        case Symbol.Kind.commentLine:
                             mSource.readLine();
                             mInputStack.pop();
                             break;
-                        case SymbolKind.error:
+                        case Symbol.Kind.error:
                             res = GPMessage.lexicalError;
                             done = true;
                             break;
