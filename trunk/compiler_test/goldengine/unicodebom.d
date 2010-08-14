@@ -1,19 +1,19 @@
 /*******************************************************************************
 
-        copyright:      Copyright (c) 2004 Kris Bell. All rights reserved
+		copyright:      Copyright (c) 2004 Kris Bell. All rights reserved
 
-        license:        BSD style: $(LICENSE)
+		license:        BSD style: $(LICENSE)
 
-        version:        Initial release: December 2005
+		version:        Initial release: December 2005
 
-        author:         Kris
+		author:         Kris
 
 *******************************************************************************/
 
 module goldengine.unicodebom;
 
 version(Tango) {
-    public import tango.text.convert.UnicodeBom;
+	public import tango.text.convert.UnicodeBom;
 } else {
 	private import Utf = std.utf;
 	private import std.intrinsic;
