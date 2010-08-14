@@ -33,43 +33,43 @@ class Reader {
 }
 
 public class Grammar {
-    private {
+	private {
 		Reader mBuffer;
-        int mStartSymbolIdx;
+		int mStartSymbolIdx;
 
-        const wstring cgtHeader = "GOLD Parser Tables/v1.0";
-    }
+		const wstring cgtHeader = "GOLD Parser Tables/v1.0";
+	}
 
-    public {
-        ///Grammar parameters
-        wstring grmName;
-        wstring grmVersion;
-        wstring grmAuthor;
-        wstring grmAbout;
-        bool caseSensitive;
+	public {
+		///Grammar parameters
+		wstring grmName;
+		wstring grmVersion;
+		wstring grmAuthor;
+		wstring grmAbout;
+		bool caseSensitive;
 
-        ///Parse tables
-        wstring[] charsetTable;
-        Symbol[] symbolTable;
-        Rule[] ruleTable;
-        DFAState[] dfaStateTable;
-        LALRState[] lalrStateTable;
+		///Parse tables
+		wstring[] charsetTable;
+		Symbol[] symbolTable;
+		Rule[] ruleTable;
+		DFAState[] dfaStateTable;
+		LALRState[] lalrStateTable;
 
-        ///Initial states
-        int initialDFAState;
-        int initialLALRState;
+		///Initial states
+		int initialDFAState;
+		int initialLALRState;
 
-        ///Special symbols
-        Symbol symbolStart;
-        Symbol symbolEof;
-        Symbol symbolError;
-    }
+		///Special symbols
+		Symbol symbolStart;
+		Symbol symbolEof;
+		Symbol symbolError;
+	}
 
-    ///Declaration of CGT format constants and structures
-    ///Those are only needed when reading a grammar file
-    private {
-        struct CGTRecordEntry {
-            char entryType;
+	///Declaration of CGT format constants and structures
+	///Those are only needed when reading a grammar file
+	private {
+		struct CGTRecordEntry {
+			char entryType;
 
 			union {
 				bool    vBool;
@@ -78,8 +78,8 @@ public class Grammar {
 				wstring vString;
 			}
 
-            public static CGTRecordEntry read(Reader buffer) {
-                CGTRecordEntry res;
+			public static CGTRecordEntry read(Reader buffer) {
+				CGTRecordEntry res;
 				{
 					res.entryType = buffer.read!char;
 					switch (res.entryType) {
@@ -91,8 +91,8 @@ public class Grammar {
 						default: throw new Exception("Invalid record entry type");
 					}
 				}
-                return res;
-            }
+				return res;
+			}
 			
 			public string toString() {
 				switch (entryType) {
@@ -103,14 +103,14 @@ public class Grammar {
 					case 'S': return std.string.format("wstring('%s')", vString);
 				}
 			}
-        }
+		}
 
-        struct CGTMRecord {
-            char recId;
-            CGTRecordEntry[] entries;
+		struct CGTMRecord {
+			char recId;
+			CGTRecordEntry[] entries;
 
-            public static CGTMRecord read(Reader buffer) {
-                CGTMRecord res;
+			public static CGTMRecord read(Reader buffer) {
+				CGTMRecord res;
 				{
 					// Length.
 					res.entries.length = buffer.read!ushort - 1;
@@ -127,26 +127,26 @@ public class Grammar {
 						//writefln("  %s", e);
 					}
 				}
-                return res;
-            }
-        }
-    }
+				return res;
+			}
+		}
+	}
 
-    ///Load a grammar from a stream
-    this(void[] data) {
-        loadTables(data);
-    }
+	///Load a grammar from a stream
+	this(void[] data) {
+		loadTables(data);
+	}
 
-    //actually loads the file
-    private void loadTables(void[] data) {
+	//actually loads the file
+	private void loadTables(void[] data) {
 		mBuffer = new Reader(data);
-        processBuffer();
-    }
+		processBuffer();
+	}
 
-    //process cached data
-    private void processBuffer() {
-        //check file header
-        if (mBuffer.read!wstring != cgtHeader) throw new Exception("File format not recognized");
+	//process cached data
+	private void processBuffer() {
+		//check file header
+		if (mBuffer.read!wstring != cgtHeader) throw new Exception("File format not recognized");
 		
 		while (!mBuffer.eof) {
 			auto rt = mBuffer.read!char;
@@ -239,8 +239,8 @@ public class Grammar {
 			}
 		}
 
-        if (!symbolStart || !symbolEof || !symbolError || dfaStateTable.length < 1
-            || lalrStateTable.length < 1)
-            throw new Exception("Failed to load grammer: Missing some required values");
-    }
+		if (!symbolStart || !symbolEof || !symbolError || dfaStateTable.length < 1
+			|| lalrStateTable.length < 1)
+			throw new Exception("Failed to load grammer: Missing some required values");
+	}
 }

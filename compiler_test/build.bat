@@ -11,4 +11,6 @@ SET FILES=%FILES% goldengine\stack.d
 SET FILES=%FILES% goldengine\symbol.d
 SET FILES=%FILES% goldengine\token.d
 SET FILES=%FILES% goldengine\unicodebom.d
-dmd %FILES% -oftest.exe
+DEL /Q TEST.cgt 2> NUL
+\dev\gold\goldbuilder_main.exe TEST.grm TEST.cgt TEST.log
+dmd %FILES% -debug -J. -oftest.exe

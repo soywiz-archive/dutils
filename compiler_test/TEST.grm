@@ -1,0 +1,54 @@
+"Name"    = 'TEST' 
+"Version" = '2010'
+"Author"  = 'soywiz'
+"About"   = ''
+
+"Case Sensitive" = True
+"Start Symbol"   = <Sentences>
+
+{Id Head}        = {Letter} + [_]
+{Id Tail}        = {Id Head} + {Digit}
+
+DecLiteral       = [123456789]{digit}*
+
+Id               = {Id Head}{Id Tail}*
+
+
+! ===================================================================
+! Comments
+! ===================================================================
+
+Comment Start = '/*'
+Comment End   = '*/'
+Comment Line  = '//'
+
+!=======================================================
+
+<Sentences> ::= <Sentence> <Sentences>
+              |
+
+<Sentence>  ::= <CommaExpression> ';'
+
+<CommaExpression> ::= <Expression> ',' <CommaExpression>
+                    | <Expression>
+
+<Expression> ::= <UnaryOp>
+               | '(' <Expression> ')'
+			   | <Assignment>
+			   | <Call>
+               | <BinaryOp>
+               | <DecLiteral>
+			   | <Id>
+
+<Call> ::= <Expression> '(' <CommaExpression> ')'
+
+<UnaryOp> ::= '-' <Expression>
+
+<Assignment> ::= Id '=' <Expression>
+
+<BinaryOp> ::= <Expression> '+' <Expression>
+             | <Expression> '-' <Expression>
+
+<DecLiteral> ::= DecLiteral
+
+<Id> ::= Id
