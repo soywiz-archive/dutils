@@ -34,8 +34,8 @@ int main(string[] args) {
 		writefln("");
 		writefln("Operations:");
 		writefln("  -t  (1) Find Text blocks and writtes to 'texts.txt'.");
-		writefln("  -p  (2) Find References to text blocks defined in file 'texts.txt'.");
-		writefln("  -w  (3) Write changes from 'texts.txt' using references from 'pointers.txt' and aplying patches from 'patches.txt'.");
+		writefln("  -p  (2) Find References to text blocks defined in file 'texts*.txt' and writes to 'pointers.txt'.");
+		writefln("  -w  (3) Write changes from 'texts*.txt' using references from 'pointers*.txt' and aplying patches from 'patches.txt'.");
 		writefln("  -z  (4) Create PPFs.");
 		writefln("");
 		writefln("Examples:");
@@ -61,23 +61,26 @@ int main(string[] args) {
 		showHelp = false;
 	}
 
-	TextSearcher.Result[uint] extractTexts(string fileName) {
+	TextSearcher.Result[uint] extractTexts(string fileNames) {
 		TextSearcher.Result[uint] texts;
-		writefln("Opening texts '%s'...", fileName);
-		scope file = new BufferedFile(fileName);
-		bool skipping = false;
-		while (!file.eof) {
-			string line = std.string.strip(cast(string)file.readLine);
-			if (!skipping && line == "/*") { skipping = true; continue; }
-			if ( skipping && line == "*/") { skipping = false; continue; }
-			if (!skipping) {
-				//writefln("%s", line);
-				if (line.length) {
-					scope matches = std.regexp.search(line, r"^([^@:]+):(\w+):'(.*)'$", "mi");
-					if (matches !is null) {
-						uint start = cast(uint)hexdec(matches[1]);
-						uint end = start + cast(uint)hexdec(matches[2]);
-						texts[start] = TextSearcher.Result(start, end, stripslashes(matches[3]));
+		writefln("Finding texts files '%s'...", fileNames);
+		foreach (fileName; std.file.listdir("", fileNames)) {
+			writefln("Opening texts '%s'...", fileName);
+			scope file = new BufferedFile(fileName);
+			bool skipping = false;
+			while (!file.eof) {
+				string line = std.string.strip(cast(string)file.readLine);
+				if (!skipping && line == "/*") { skipping = true; continue; }
+				if ( skipping && line == "*/") { skipping = false; continue; }
+				if (!skipping) {
+					//writefln("%s", line);
+					if (line.length) {
+						scope matches = std.regexp.search(line, r"^([^@:]+):(\w+):'(.*)'$", "mi");
+						if (matches !is null) {
+							uint start = cast(uint)hexdec(matches[1]);
+							uint end = start + cast(uint)hexdec(matches[2]);
+							texts[start] = TextSearcher.Result(start, end, stripslashes(matches[3]));
+						}
 					}
 				}
 			}
@@ -85,45 +88,47 @@ int main(string[] args) {
 		return texts;
 	}
 	
-	Patcheable[int][uint] extractPatches(string fileName) {
+	Patcheable[int][uint] extractPatches(string fileNames) {
 		Patcheable[int][uint] patches;
-		uint address;
-		writefln("Opening patches '%s'...", fileName);
-		scope file = new BufferedFile(fileName);
-		while (!file.eof) {
-			string line = std.string.strip(cast(string)file.readLine);
-			if (line.length) {
-				// Segment.
-				{
-					scope matches = std.regexp.search(line, r"^([^@:\[]+):'(.*)'$", "mi");
-					if (matches !is null) {
-						address = cast(uint)hexdec(matches[1]);
-						//writefln("%08X", address);
-						//writefln("%s", line);
-						//texts[cast(uint)hexdec(matches[1])] = stripslashes(matches[2]);
-						continue;
-					}
-				}
-				// Patch.
-				{
-					scope matches = std.regexp.search(line, r"^\s*(C|T)\[(\w+)\-(\w+)\]", "mi");
-					if (matches !is null) {
-						uint v0 = cast(uint)hexdec(matches[2]);
-						uint v1 = cast(uint)hexdec(matches[3]);
-						/*if (v0 == 0x801943A4) {
-							writefln("%s:%08X-%08X", matches[1], v0, v1);
-						}*/
-						switch (matches[1]) {
-							case "C":
-								patches[address][v1] = new PatchCode(address, v0, v1, address, "");
-							break;
-							case "T":
-								patches[address][v0] = new PatchPointer(address, v0, address, "");
-							break;
+		foreach (fileName; std.file.listdir("", fileNames)) {
+			uint address;
+			writefln("Opening patches '%s'...", fileName);
+			scope file = new BufferedFile(fileName);
+			while (!file.eof) {
+				string line = std.string.strip(cast(string)file.readLine);
+				if (line.length) {
+					// Segment.
+					{
+						scope matches = std.regexp.search(line, r"^([^@:\[]+):'(.*)'$", "mi");
+						if (matches !is null) {
+							address = cast(uint)hexdec(matches[1]);
+							//writefln("%08X", address);
+							//writefln("%s", line);
+							//texts[cast(uint)hexdec(matches[1])] = stripslashes(matches[2]);
+							continue;
 						}
-						continue;
-						//writefln("%s", line);
-						//texts[cast(uint)hexdec(matches[1])] = stripslashes(matches[2]);
+					}
+					// Patch.
+					{
+						scope matches = std.regexp.search(line, r"^\s*(C|T)\[(\w+)\-(\w+)\]", "mi");
+						if (matches !is null) {
+							uint v0 = cast(uint)hexdec(matches[2]);
+							uint v1 = cast(uint)hexdec(matches[3]);
+							/*if (v0 == 0x801943A4) {
+								writefln("%s:%08X-%08X", matches[1], v0, v1);
+							}*/
+							switch (matches[1]) {
+								case "C":
+									patches[address][v1] = new PatchCode(address, v0, v1, address, "");
+								break;
+								case "T":
+									patches[address][v0] = new PatchPointer(address, v0, address, "");
+								break;
+							}
+							continue;
+							//writefln("%s", line);
+							//texts[cast(uint)hexdec(matches[1])] = stripslashes(matches[2]);
+						}
 					}
 				}
 			}
@@ -135,7 +140,7 @@ int main(string[] args) {
 		doRestoring();
 
 		auto search = new MipsPointerSearch(mmap);
-		auto texts = extractTexts("texts.txt");
+		auto texts = extractTexts("texts*.txt");
 		writefln("Found %d texts.", texts.length);
 		foreach (result; TextSearcher(mmap)) {
 			if (result.start in texts) search.addAddress(result.start, result.end);
@@ -169,8 +174,8 @@ int main(string[] args) {
 		doRestoring();
 	
 		auto search  = new MipsPointerSearch(mmap);
-		auto texts   = extractTexts("texts.txt");
-		auto patches = extractPatches("pointers.txt");
+		auto texts   = extractTexts("texts*.txt");
+		auto patches = extractPatches("pointers*.txt");
 
 		foreach (text; texts) {
 			auto pe = new PatchEntry();
