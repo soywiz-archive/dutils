@@ -29,7 +29,8 @@ int main(string[] args) {
 		writefln("Operations:");
 		writefln("  -t  (1) Find Text blocks and writtes to 'texts.txt'.");
 		writefln("  -p  (2) Find References to text blocks defined in file 'texts.txt'.");
-		writefln("  -w  (3) Write changes from 'texts.txt' using references from 'pointers.txt'.");
+		writefln("  -w  (3) Write changes from 'texts.txt' using references from 'pointers.txt' and aplying patches from 'patches.txt'.");
+		writefln("  -z  (4) Create PPFs.");
 		writefln("");
 		writefln("Examples:");
 		writefln("  pmips -map SLUS_006.26:800@800A0000 -t");
@@ -175,6 +176,10 @@ int main(string[] args) {
 		
 		MipsPointerPatch(search);
 		writefln("Pached successfully");
+		showHelp = false;
+	}
+	
+	void createPPF() {
 		writefln("Creating PPF");
 		mmap.close();
 		foreach (map; mmap.maps) {
@@ -237,6 +242,7 @@ int main(string[] args) {
 			"t", &findTextBlocks,
 			"p", &findPointers,
 			"w", &patchFile,
+			"z", &createPPF,
 			"h|help", &help
 		);
 	} else {
