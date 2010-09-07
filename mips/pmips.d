@@ -14,6 +14,12 @@ import std.stdio, std.c.stdio, std.string, std.stream, std.regex, std.regexp, st
 int main(string[] args) {
 	auto mmap = new StreamAggregator;
 	bool showHelp = true;
+	
+	void delegate()[] restoringList;
+	
+	void doRestoring() {
+		foreach (restoring; restoringList) restoring();
+	}
 
 	void help() {
 		writefln("---------------------------------------------------------------------");
@@ -37,6 +43,8 @@ int main(string[] args) {
 	}
 	
 	void findTextBlocks(string option) {
+		doRestoring();
+
 		//writefln("%s", option);
 		auto fileName = "texts.txt";
 		writef("Finding text blocks...");
@@ -124,6 +132,8 @@ int main(string[] args) {
 	}
 	
 	void findPointers(string option) {
+		doRestoring();
+
 		auto search = new MipsPointerSearch(mmap);
 		auto texts = extractTexts("texts.txt");
 		writefln("Found %d texts.", texts.length);
@@ -156,6 +166,8 @@ int main(string[] args) {
 	}
 
 	void patchFile() {
+		doRestoring();
+	
 		auto search  = new MipsPointerSearch(mmap);
 		auto texts   = extractTexts("texts.txt");
 		auto patches = extractPatches("pointers.txt");
@@ -216,9 +228,11 @@ int main(string[] args) {
 				std.file.copy(file_name, fileBack);
 				writefln("Ok");
 			} else {
-				writef("Restoring file '%s'->'%s'...", fileBack, file_name);
-				std.file.copy(fileBack, file_name);
-				writefln("Ok");
+				restoringList ~= {
+					writef("Restoring file '%s'->'%s'...", fileBack, file_name);
+					std.file.copy(fileBack, file_name);
+					writefln("Ok");
+				};
 			}
 			
 			auto stream = new std.stream.File(file_name, FileMode.In | FileMode.Out);
