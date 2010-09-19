@@ -8,5 +8,5 @@ SET SOURCES=%SOURCES% ppf.d
 SET SOURCES=%SOURCES% pmips_textsearch.d
 SET SOURCES=%SOURCES% pmips_pointersearch.d
 SET SOURCES=%SOURCES% pmips_patcher.d
-dmd %SOURCES% pmips.d -ofpmips.exe
+dmd -g -debug %SOURCES% pmips.d -ofpmips.exe
 del /q pmips.map pmips.obj

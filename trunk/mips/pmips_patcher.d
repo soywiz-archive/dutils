@@ -148,8 +148,13 @@ class MipsPointerPatch {
 		void patch_actually_new() {
 			void dopatch(Patcheable patch) {
 				patch.valueNew = ranges.getReuse(patch.text, patch.valueRaw);
-				mmap.position = patch.valueNew;
-				mmap.writeString(patch.text);
+				try {
+					mmap.position = patch.valueNew;
+					mmap.writeString(patch.text);
+				} catch (Exception e) {
+					writefln("POS(%08X) TEXT.length(%d)", patch.valueNew, patch.text.length);
+					throw(e);
+				}
 				patch.patch(mmap, patch.valueNew);
 			}
 			writefln("Patching code instructions (HI(LUI)+LO(ORI/ADDI))...");
@@ -169,7 +174,9 @@ class MipsPointerPatch {
 					);
 				}
 
-				foreach (patch; patches) dopatch(patch);
+				foreach (patch; patches) {
+					dopatch(patch);
+				}
 			}
 
 			writefln("Patching text instructions (32-bits)...");
