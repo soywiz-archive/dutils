@@ -42,7 +42,21 @@ class TextSearcher {
 			int count_nonalpha = 0;
 			int count_alpha    = 0;
 			
+			bool special = false;
+			
 			foreach (c; text) {
+				if (c == 0x81) {
+					special = true;
+					count_alpha++;
+					continue;
+				} else {
+					if (special) {
+						count_alpha++;
+						continue;
+					}
+					special = false;
+				}
+
 				if (c < 0x20) {
 					//return false;
 					count_special++;
