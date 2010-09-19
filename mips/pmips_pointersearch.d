@@ -58,10 +58,15 @@ class MipsPointerSearch {
 	}
 
 	public void execute() {
+		/*int round_align_min(int value, int alignv) {
+			if (value % alignv) {
+				return value - 
+			}
+		}*/
 		foreach (map; mmap.maps) {
 			this.data_base = map.start;
 			this.data      = cast(ubyte[])map.data;
-			this.code      = cast(uint[])map.data;
+			this.code      = cast(uint[])(this.data[0..this.data.length - this.data.length % 4]);
 			execute(0);
 		}
 	}
