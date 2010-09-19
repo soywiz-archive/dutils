@@ -1,6 +1,6 @@
 module stream_aggregator;
 
-import std.stream, std.string;
+import std.stream, std.string, std.stdio;
 
 class StreamAggregator : Stream {
 	class Map {
@@ -48,7 +48,10 @@ class StreamAggregator : Stream {
 	}
 
 	size_t writeBlock(const void* buffer, size_t size) {
-		if (currentMap is null) return 0;
+		if (currentMap is null) {
+			throw(new Exception(std.string.format("Trying to write out of any segment (0x%08X)", currentPosition)));
+			return 0;
+		}
 		size_t transferredBytes = currentMap.stream.writeBlock(buffer, size);
 		position = position + transferredBytes;
 		return transferredBytes;
