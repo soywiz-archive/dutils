@@ -9,7 +9,7 @@ import stream_aggregator;
 import pmips_pointersearch;
 
 class MipsPointerPatch {
-	RangeList ranges;
+	IRangeList ranges;
 	PatchEntry[int] search;
 	StreamAggregator mmap;
 
@@ -20,6 +20,7 @@ class MipsPointerPatch {
 			//writefln("pentry: %08X.%08X", pentry.start, pentry.length);
 			this.ranges.add(pentry.start, pentry.length);
 		}
+		this.ranges.addEnd();
 		
 		//this.ranges.show();
 		this.ranges.showSummary();
@@ -143,6 +144,8 @@ class MipsPointerPatch {
 					}
 				}
 			}
+			//assert(0);
+			//throw(new Exception("Not implemented"));
 		}
 		
 		void patch_actually_new() {
@@ -183,14 +186,12 @@ class MipsPointerPatch {
 			foreach (patch; text_patches) dopatch(patch);
 		}
 
-		static if (1) {
-			alias patch_actually_new patch_actually;
-		} else {
-			alias patch_actually_old patch_actually;
-		}
-
 		prepare_patches();
-		patch_actually();
+		if (0) {
+			patch_actually_old();
+		} else {
+			patch_actually_new();
+		}
 		check_reused_lui();
 		
 		this.ranges.showSummary();

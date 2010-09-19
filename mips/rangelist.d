@@ -2,26 +2,36 @@ module rangelist;
 
 import std.stdio, std.string;
 
-static class RangeList {
-	int padding = 1;
-	int[int] rangeStart;
-	int[int] rangeEnd;
-	
-	struct Range { uint start, end; uint length() { return end - start; } }
+struct Range {
+	uint start, end;
+	uint length() { return end - start; }
+	string toString() { return std.string.format("%08X-%08X(%04d)", start, end, length); }
+}
 
+interface IRangeList {
+	uint showSummary();
+	void add(int from, int length);
+	void addEnd();
+	uint getReuse(string text, long affinitySegment = -1);
+	uint getReuse(string[] texts, long affinitySegment = -1);
+	int  opApply(int delegate(ref Range) dg);
+}
+
+abstract class RangeListBase : IRangeList {
+	Range[uint] ranges;
+	Range[uint] rangesEnd;
+
+	void addEnd() {
+		//show();
+	}
+	
 	int opApply(int delegate(ref Range) dg) {
 		int result = 0;
-		foreach (start; rangeStart.keys.sort) {
-			result = dg(Range(start, start + rangeStart[start]));
+		foreach (start; ranges.keys.sort) {
+			result = dg(ranges[start]);
 			if (result) break;
 		}
 		return result;
-	}
-
-	int getLastPosition() {
-		int last = 0;
-		foreach (int r, int l; rangeStart) if (r + l > last) last = r + l;
-		return last;
 	}
 
 	void show() {
@@ -39,81 +49,57 @@ static class RangeList {
 		return totalLength;
 	}
 
-	void add(int from, int length) {
-		/*if (from in rangeStart) {
-			if (length > rangeStart[from]) {
-				rangeEnd.remove(from + rangeStart[from]);
-				rangeStart[from] = length;
-				rangeEnd[from + length] = length;
+	void add(Range range) {
+		void combineCreatedRange(Range middleRange) {
+			Range lowerRange = void, upperRange = void, combinedRange = void;
+
+			if (middleRange.start in rangesEnd) {
+				lowerRange = rangesEnd[middleRange.start];
+				combinedRange = Range(lowerRange.start, middleRange.end);
+
+				//writefln("LOW: [%s :: %s] --> %s", lowerRange, middleRange, combinedRange);
+
+				remove(lowerRange);
+				remove(middleRange);
+				add(combinedRange);
 			}
-			return;
-		}*/
 
-		// Range inner.
-		foreach (range; this) if (from >= range.start && from < range.end) return;
+			if (middleRange.end in ranges) {
+				upperRange = ranges[middleRange.end];
+				combinedRange = Range(middleRange.start, upperRange.end);
+				
+				//writefln("UPP: [%s :: %s] --> %s", middleRange, upperRange, combinedRange);
 
-		//printf("ADD_RANGE: %08X, %d\n", from, length);
-
-		if (from in rangeEnd) {
-			int rstart = from - rangeEnd[from];
-			rangeStart[rstart] += length;
-			rangeEnd.remove(from);
-			rangeEnd[from + length] = rangeStart[rstart];
-		} else {
-			rangeStart[from] = rangeEnd[from + length] = length;
+				remove(middleRange);
+				remove(upperRange);
+				add(combinedRange);
+			}
 		}
 
-		//removeInnerRanges();
-
-		//showRanges();
+		if (range.length > 0) {
+			ranges[range.start]  = range;
+			rangesEnd[range.end] = range;
+			combineCreatedRange(range);
+		}
 	}
 
-	int removeInner() {
-		int removed = 0;
-		bool done = false;
-		while (!done) {
-			done = true;
-			foreach (int afrom, int alen; rangeStart) {
-				foreach (int bfrom, int blen; rangeStart) {
-					if (afrom == bfrom) continue;
-
-					if (bfrom < afrom + alen && bfrom + blen > afrom + alen) {
-						show();
-
-						writefln("%08X(%d)", afrom, alen);
-						writefln("%08X(%d)", bfrom, blen);
-
-						assert(1 == 0);
-					}
-
-					if (bfrom < afrom && bfrom + blen > afrom) {
-						show();
-						assert(1 == 0);
-					}
-
-					if (afrom >= bfrom && afrom + alen <= bfrom + blen) {
-						done = false;
-						rangeEnd.remove(afrom + alen);
-						rangeStart.remove(afrom);
-						removed++;
-						break;
-					}
-				}
-
-				if (!done) break;
-			}
-		}
-		return removed;
+	void add(int from, int length) {
+		add(Range(from, from + length));
 	}
 
 	void use(int from, int length) {
-		rangeEnd[from + rangeStart[from]] -= length;
-		if (rangeStart[from] - length > 0) {
-			rangeStart[from + length] = rangeStart[from] - length;
-		}
-		rangeStart.remove(from);
+		Range range = ranges[from];
+		remove(range);
+		add(Range(range.start + length, range.end));
 	}
 
+	void remove(Range range) {
+		ranges.remove(range.start);
+		rangesEnd.remove(range.end);
+	}
+}
+
+class RangeList : RangeListBase {
 	Range getFreeRange(int length, long affinitySegment = -1) {
 		Range[] valid_ranges;
 		
@@ -156,6 +142,7 @@ static class RangeList {
 
 		uint getReuse(string text, long affinitySegment = -1) {
 			if ((text in stringPos) is null) {
+				//writefln("getReuse()(%s)(%d)", text, text.length);
 				stringPos[text] ~= getAndUse(text.length, affinitySegment);
 			}
 			return getReuseInternal(text);
@@ -166,6 +153,7 @@ static class RangeList {
 		uint getReuse(string[] texts, long affinitySegment = -1) {
 			string text_joined = std.string.join(texts, "");
 			if ((text_joined in stringPos) is null) {
+				//writefln("getReuse[](%s)(%d) : %s", text_joined, text_joined.length, texts);
 				uint start = getAndUse(text_joined.length, affinitySegment);
 				assert(hasAffinity(start, start + text_joined.length - 1), "Texts must be together in the same segment.");
 				int pos = start;
@@ -183,11 +171,14 @@ static class RangeList {
 
 	int getAndUse(int length, long affinitySegment = -1) {
 		int start;
+		//writefln("getAndUse(%d)", length);
 		use(start = getFreeRange(length, affinitySegment).start, length);
 		return start;
 	}
 
 	int length() {
-		int r = 0; foreach (int l; rangeStart) r += l; return r;
+		int r = 0;
+		foreach (ref range; ranges) r += range.length;
+		return r;
 	}
 }	
