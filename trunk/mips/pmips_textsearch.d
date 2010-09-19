@@ -74,6 +74,7 @@ class TextSearcher {
 			//0x801b36a4
 
 			for (int n = end; ((n % 4) != 0); n++) {
+				if (end >= data.length) return false;
 				if (data[end] != '\0') return false;
 			}
 			
