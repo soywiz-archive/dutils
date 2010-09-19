@@ -14,11 +14,19 @@ import std.stdio, std.c.stdio, std.string, std.stream, std.regex, std.regexp, st
 int main(string[] args) {
 	auto mmap = new StreamAggregator;
 	bool showHelp = true;
+	string prefix = "";
 	
 	void delegate()[] restoringList;
 	
 	void doRestoring() {
 		foreach (restoring; restoringList) restoring();
+	}
+
+	string getPrefixedFilename(string filename) {
+		if (prefix.length) {
+			filename = prefix ~ '.' ~ filename;
+		}
+		return filename;
 	}
 
 	void help() {
@@ -30,7 +38,8 @@ int main(string[] args) {
 		writefln("---------------------------------------------------------------------");
 		writefln("");
 		writefln("Options:");
-		writefln("  -map  Adds a memory map. -map FILE:START-END@MEMORY");
+		writefln("  -map     Adds a memory map. -map FILE:START-END@MEMORY");
+		writefln("  -prefix  Sets a prefix to add to the files names. It will convert 'texts.txt' into 'prefix.texts.txt' and so on.");
 		writefln("");
 		writefln("Operations:");
 		writefln("  -t  (1) Find Text blocks and writtes to 'texts.txt'.");
@@ -46,7 +55,7 @@ int main(string[] args) {
 		doRestoring();
 
 		//writefln("%s", option);
-		auto fileName = "texts.txt";
+		auto fileName = getPrefixedFilename("texts.txt");
 		writef("Finding text blocks...");
 		scope results = TextSearcher(mmap);
 		writefln("%d found", results.length);
@@ -60,7 +69,7 @@ int main(string[] args) {
 		file.close();		
 		showHelp = false;
 	}
-
+	
 	TextSearcher.Result[uint] extractTexts(string fileNames) {
 		TextSearcher.Result[uint] texts;
 		writefln("Finding texts files '%s'...", fileNames);
@@ -140,14 +149,14 @@ int main(string[] args) {
 		doRestoring();
 
 		auto search = new MipsPointerSearch(mmap);
-		auto texts = extractTexts("texts*.txt");
+		auto texts = extractTexts(getPrefixedFilename("texts*.txt"));
 		writefln("Found %d texts.", texts.length);
 		foreach (result; TextSearcher(mmap)) {
 			if (result.start in texts) search.addAddress(result.start, result.end);
 		}
 		search.execute();
 		//search.dump();
-		scope filew = new std.stream.File("pointers.txt", FileMode.OutNew);
+		scope filew = new std.stream.File(getPrefixedFilename("pointers.txt"), FileMode.OutNew);
 		foreach (address, si; search) {
 			if (si.patches.length) {
 				filew.writef("%08X:'", si.start);
@@ -174,8 +183,8 @@ int main(string[] args) {
 		doRestoring();
 	
 		auto search  = new MipsPointerSearch(mmap);
-		auto texts   = extractTexts("texts*.txt");
-		auto patches = extractPatches("pointers*.txt");
+		auto texts   = extractTexts(getPrefixedFilename("texts*.txt"));
+		auto patches = extractPatches(getPrefixedFilename("pointers*.txt"));
 
 		foreach (text; texts) {
 			auto pe = new PatchEntry();
@@ -217,6 +226,10 @@ int main(string[] args) {
 		//PPF.create();
 		showHelp = false;
 	}
+	
+	void setPrefix(string option, string value) {
+		prefix = value;
+	}
 
 	void addMap(string option, string value) {
 		scope matches = std.regexp.search(value, r"^([^@:]+)(:([0-9a-f]*)(\-([0-9a-f]*))?)?(@([0-9a-f]+))?", "mi");
@@ -256,6 +269,7 @@ int main(string[] args) {
 		getopt(args,
 			config.bundling,
 			"map", &addMap,
+			"prefix", &setPrefix,
 
 			config.noBundling,
 			"t", &findTextBlocks,
