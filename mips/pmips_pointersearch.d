@@ -156,6 +156,12 @@ class MipsPointerSearch {
 
 				if (cvm in search) {
 					if (_show_info) writefln("Find!");
+					// Only once.
+					if ((cpos in search[cvm].patches) is null) {
+						if (rs != rt) {
+							writefln("LUI+ADDI/ORI using several registers (%d, %d) LUI_GOOD(0x%08X), LUI_BAD(0x%08X), ADDI/ORI(0x%08X)", rs, rt, state.lui[rs], state.lui[rt], cpos);
+						}
+					}
 					// FIXED BUG!! rt -> rs
 					search[cvm].patches[cpos] = new PatchCode(cvm, state.lui[rs], cpos, cv, search[cvm].text);
 				}
