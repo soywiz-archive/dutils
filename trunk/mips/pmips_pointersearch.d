@@ -84,6 +84,7 @@ class MipsPointerSearch {
 			uint cpos = data_base + (n * 4); // Dirección actual
 			int j, cop, rs, rt;              // Partes de la instrucción
 			short imm;                       // Valor inmediato
+			bool _show_info = false;
 
 			// Comprobamos si hemos encontrado un puntero de 32 bits
 			//writefln("%08X", cvm);
@@ -98,25 +99,50 @@ class MipsPointerSearch {
 			// TIPO:J | Salto incondicional largo
 			j   = cv & 0x3FFFFFF; // 26 bits
 
+			/*if (cpos >= 0x8011FF90 && cpos <= 0x80120000) {
+				_show_info = true;
+				writef("%08X:", cpos);
+			}*/
+
 			// Comprueba el código de operación
 			switch (cop) {
 				// Saltos cortos
-				case 0b000100: case 0b000101: isbranch = true; break; // BEQ, BNE
-				case 0b000001: switch (rt) { case 0b00001: case 0b10001: case 0b00000: case 0b10000: isbranch = true; default: } break; // BGEZ, BGEZAL, BLTZ, BLTZAL
-				case 0b000110: case 0b000111: if (rt == 0) isbranch = true; break; // BLEZ, BGTZ
+				case 0b000100: case 0b000101: // BEQ, BNE
+					if (_show_info) writefln("BEQ/BNE");
+					isbranch = true;
+				break;
+				case 0b000001: // BGEZ, BGEZAL, BLTZ, BLTZAL
+					switch (rt) {
+						case 0b00001: case 0b10001: case 0b00000: case 0b10000:
+							if (_show_info) writefln("BGEZ/BGEZAL/BLTZ/BLTZAL");
+							isbranch = true;
+						default:
+					}
+				break;
+				case 0b000110: case 0b000111: // BLEZ, BGTZ
+					if (rt == 0) {
+						if (_show_info) writefln("BLEZ/BGTZ");
+						isbranch = true;
+					}
+				break;
 				// Saltos largos
-				//case 0b000010: break; // J
+				/*case 0b000010: // J
+					isbranch = true;
+				break;*/
 				// Carga de datos típicas (LUI + ADDI/ORI)
 				case 0b001111: // LUI
+					if (_show_info) writefln("LUI");
 					state.rld[rt] = (imm << 16);
 					state.lui[rt] = cpos;
 					update = true;
 				break;
 				case 0b001000: case 0b001001: // ADDI/ADDIU
+					if (_show_info) writefln("ADDI/ADDIU");
 					state.rld[rt] = state.rld[rs] + imm;
 					update = true;
 				break;
 				case 0b001101: // ORI
+					if (_show_info) writefln("ORI");
 					state.rld[rt] = state.rld[rs] | imm;
 					update = true;
 				break;
@@ -129,7 +155,9 @@ class MipsPointerSearch {
 				cvm = ((cv = state.rld[rt]) & valueMask);
 
 				if (cvm in search) {
-					search[cvm].patches[cpos] = new PatchCode(cvm, state.lui[rt], cpos, cv, search[cvm].text);
+					if (_show_info) writefln("Find!");
+					// FIXED BUG!! rt -> rs
+					search[cvm].patches[cpos] = new PatchCode(cvm, state.lui[rs], cpos, cv, search[cvm].text);
 				}
 			}
 

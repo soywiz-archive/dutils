@@ -127,7 +127,8 @@ class RangeList : RangeListBase {
 		throw(new Exception(format("Not enough space (%d)", length)));
 	}
 
-	bool hasAffinity(uint address, long affinitySegment = -1, uint affinityMask = 0x_FFFF_0000) {
+	bool hasAffinity(uint address, long affinitySegment = -1, uint affinityMask = 0x_8FFF_0000) {
+	//bool hasAffinity(uint address, long affinitySegment = -1, uint affinityMask = 0x_FFFF_0000) {
 		if (affinitySegment == -1) return true;
 		return (address & affinityMask) == (affinitySegment & affinityMask);
 	}
@@ -155,7 +156,7 @@ class RangeList : RangeListBase {
 			if ((text_joined in stringPos) is null) {
 				//writefln("getReuse[](%s)(%d) : %s", text_joined, text_joined.length, texts);
 				uint start = getAndUse(text_joined.length, affinitySegment);
-				assert(hasAffinity(start, start + text_joined.length - 1), "Texts must be together in the same segment.");
+				if (!hasAffinity(start, start + text_joined.length - 1)) throw(new Exception("Texts must be together in the same segment."));
 				int pos = start;
 				foreach (text; texts) {
 					stringPos[text] ~= pos;

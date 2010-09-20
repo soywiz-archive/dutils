@@ -102,7 +102,8 @@ class MipsPointerPatch {
 		
 		void check_reused_lui() {
 			foreach (patches; LUI) {
-				const LUI_MASK = 0x_FFFF_0000;
+				//const LUI_MASK = 0x_FFFF_0000;
+				const LUI_MASK = 0x_8FFF_0000;
 				//const LUI_MASK = 0x_FFFF_FFFF;
 				if (patches.length >= 2) {
 					bool error = false;
@@ -119,35 +120,6 @@ class MipsPointerPatch {
 			}
 		}
 		
-		void patch_actually_old() {
-			foreach (pentry; search) {
-				foreach (patch; pentry.patches) {
-					PatchCode pcode = cast(PatchCode)patch;
-					patch.text = pentry.text;
-
-					string text = pentry.text ~ '\0';
-					long suggested_segment = -1;
-					if (pcode) suggested_segment = pcode.valueRaw;
-					uint pos = ranges.getReuse(text, suggested_segment);
-					try {
-						mmap.position = pos;
-						mmap.writeString(text);
-					} catch (Exception e) {
-						writefln("Can't write translated string to 0x%08X", pos);
-						throw(e);
-					}
-
-					patch.patch(mmap, pos);
-
-					if (pcode !is null) {
-						LUI[pcode.addressHi] ~= pcode;
-					}
-				}
-			}
-			//assert(0);
-			//throw(new Exception("Not implemented"));
-		}
-		
 		void patch_actually_new() {
 			void dopatch(Patcheable patch) {
 				patch.valueNew = ranges.getReuse(patch.text, patch.valueRaw);
@@ -161,10 +133,12 @@ class MipsPointerPatch {
 				patch.patch(mmap, patch.valueNew);
 			}
 			writefln("Patching code instructions (HI(LUI)+LO(ORI/ADDI))...");
-			foreach (lui_addr, patches; code_patches_sorted_by_lui) { assert (patches.length);
+			foreach (lui_addr, patches; code_patches_sorted_by_lui) {
+				if (!patches.length) throw(new Exception("!patches.length"));
 				string[] text_list; foreach (patch; patches) text_list ~= patch.text;
 
 				try {
+					writefln("%08X : <<%s>>", patches[0].valueRaw, text_list);
 					ranges.getReuse(
 						text_list,
 						patches[0].valueRaw      // Use this segment if possible.
@@ -187,11 +161,7 @@ class MipsPointerPatch {
 		}
 
 		prepare_patches();
-		if (0) {
-			patch_actually_old();
-		} else {
-			patch_actually_new();
-		}
+		patch_actually_new();
 		check_reused_lui();
 		
 		this.ranges.showSummary();
