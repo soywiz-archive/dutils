@@ -138,7 +138,7 @@ class MipsPointerPatch {
 				string[] text_list; foreach (patch; patches) text_list ~= patch.text;
 
 				try {
-					writefln("%08X : <<%s>>", patches[0].valueRaw, text_list);
+					//writefln("%08X : <<%s>>", patches[0].valueRaw, text_list);
 					ranges.getReuse(
 						text_list,
 						patches[0].valueRaw      // Use this segment if possible.
