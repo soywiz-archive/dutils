@@ -87,6 +87,7 @@ class MipsPointerSearch {
 			int j, cop, rs, rt;              // Partes de la instrucción
 			short imm;                       // Valor inmediato
 			bool _show_info = false;
+			bool reset_rt = false;
 
 			// Comprobamos si hemos encontrado un puntero de 32 bits
 			//writefln("%08X", cvm);
@@ -143,11 +144,13 @@ class MipsPointerSearch {
 					if (_show_info) writefln("ADDI/ADDIU");
 					state.rld[rt] = state.rld[rs] + imm;
 					update = true;
+					reset_rt = true;
 				break;
 				case 0b001101: // ORI
 					if (_show_info) writefln("ORI");
 					state.rld[rt] = state.rld[rs] | imm;
 					update = true;
+					reset_rt = true;
 				break;
 				case 0b000000:
 					switch (cv & 0b_11111_11111_11111_111111) {
@@ -180,8 +183,11 @@ class MipsPointerSearch {
 					//state.defined[rt] = false;
 					// Sets to an invalid value. Since we aren't emulating all the operations afecting to registers like (LHU, LB, LW...)
 					// Also we can't handle in this utility incremental loadings.
-					state.rld[rt] = undefined;
 				}
+			}
+			
+			if (reset_rt) {
+				state.rld[rt] = undefined;
 			}
 
 			if (branch != -1) {
