@@ -74,7 +74,10 @@ class PatchCode : Patcheable {
 	}
 
 	void patch(Stream stream, uint valueNew) {
+		static bool[uint] rememberLUIs;
 		uint HI, LO;
+		uint HI_back, LO_back;
+		uint oldValue = -1;
 		
 		uint read(uint position, ref uint v) {
 			try {
@@ -99,11 +102,23 @@ class PatchCode : Patcheable {
 			}
 			return v;
 		}
+
+		if (addressHi == 0x8011FC2C) {
+			//writefln("new:%08X", valueNew);
+		}
 		
-		read(addressHi, HI);
-		read(addressLo, LO);
+		read(addressHi, HI); HI_back = HI;
+		read(addressLo, LO); LO_back = LO;
+		oldValue = ((HI >> 0) & 0xFFFF) << 16;
 		{
 			patchMIPSLoadAdress(HI, LO, valueNew);
+		}
+		if ((HI != HI_back) || (addressHi in rememberLUIs)) {
+			if ((addressHi in rememberLUIs) && (HI != HI_back)) {
+				writefln(" :: (Error) :: Modified a LUI with several values");
+			}
+			rememberLUIs[addressHi] = true;
+			writefln("  :: (Warning) :: Modified LUI at 0x%08X for ADDI/ORI at 0x%08X :: value(0x%08X->0x%08X)", addressHi, addressLo, oldValue, valueNew);
 		}
 		write(addressHi, HI);
 		write(addressLo, LO);
