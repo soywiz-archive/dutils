@@ -10,6 +10,7 @@ class MipsPointerSearch {
 	static struct ANALYSIS_STATE {
 		uint rld[32]; // Value of the registers.
 		uint lui[32]; // Position where the affected LUI was found.
+		//bool defined[32];
 	}
 
 	PatchEntry[int] search;
@@ -99,7 +100,7 @@ class MipsPointerSearch {
 			// TIPO:J | Salto incondicional largo
 			j   = cv & 0x3FFFFFF; // 26 bits
 
-			/*if (cpos >= 0x8011FF90 && cpos <= 0x80120000) {
+			/*if (cpos >= 0x800B074C && cpos <= 0x800B0800) {
 				_show_info = true;
 				writef("%08X:", cpos);
 			}*/
@@ -135,6 +136,7 @@ class MipsPointerSearch {
 					state.rld[rt] = (imm << 16);
 					state.lui[rt] = cpos;
 					update = true;
+					//state.defined[rt] = true;
 				break;
 				case 0b001000: case 0b001001: // ADDI/ADDIU
 					if (_show_info) writefln("ADDI/ADDIU");
@@ -155,7 +157,7 @@ class MipsPointerSearch {
 				cvm = ((cv = state.rld[rt]) & valueMask);
 
 				if (cvm in search) {
-					if (_show_info) writefln("Find!");
+					if (_show_info) writefln("Find! (%08X)", cvm);
 					// Only once.
 					if ((cpos in search[cvm].patches) is null) {
 						if (rs != rt) {
@@ -164,6 +166,10 @@ class MipsPointerSearch {
 					}
 					// FIXED BUG!! rt -> rs
 					search[cvm].patches[cpos] = new PatchCode(cvm, state.lui[rs], cpos, cv, search[cvm].text);
+					//state.defined[rt] = false;
+					// Sets to an invalid value. Since we aren't emulating all the operations afecting to registers like (LHU, LB, LW...)
+					// Also we can't handle in this utility incremental loadings.
+					state.rld[rt] = 0xCCCCCCCC;
 				}
 			}
 
