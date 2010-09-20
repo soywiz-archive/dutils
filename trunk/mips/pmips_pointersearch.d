@@ -7,9 +7,10 @@ import string_utils;
 import stream_aggregator;
 
 class MipsPointerSearch {
+	const uint undefined = 0xCCCCCCCC;
 	static struct ANALYSIS_STATE {
 		uint rld[32]; // Value of the registers.
-		uint lui[32]; // Position where the affected LUI was found.
+		uint lui[32] = [undefined]; // Position where the affected LUI was found.
 		//bool defined[32];
 	}
 
@@ -100,10 +101,10 @@ class MipsPointerSearch {
 			// TIPO:J | Salto incondicional largo
 			j   = cv & 0x3FFFFFF; // 26 bits
 
-			/*if (cpos >= 0x800B074C && cpos <= 0x800B0800) {
+			if (cpos >= 0x80114F70 && cpos <= 0x80115000) {
 				_show_info = true;
 				writef("%08X:", cpos);
-			}*/
+			}
 
 			// Comprueba el código de operación
 			switch (cop) {
@@ -148,6 +149,16 @@ class MipsPointerSearch {
 					state.rld[rt] = state.rld[rs] | imm;
 					update = true;
 				break;
+				case 0b000000:
+					switch (cv & 0b_11111_11111_11111_111111) {
+						case 0b_00000_00000_00000_001000: // JR
+							state.lui[] = 0;
+							state.rld[] = undefined;
+						break;
+						default:
+						break;
+					}
+				break;
 				default: break;
 			}
 
@@ -169,7 +180,7 @@ class MipsPointerSearch {
 					//state.defined[rt] = false;
 					// Sets to an invalid value. Since we aren't emulating all the operations afecting to registers like (LHU, LB, LW...)
 					// Also we can't handle in this utility incremental loadings.
-					state.rld[rt] = 0xCCCCCCCC;
+					state.rld[rt] = undefined;
 				}
 			}
 
