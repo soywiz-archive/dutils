@@ -13,7 +13,7 @@ align(1) struct DOSTIMEDATE {
 	void opAssign(d_time t) { time = toDosFileTime(t); }
 	d_time timestamp() { return toDtime(time); }
 	
-	static void opCall(d_time dtd) { DOSTIMEDATE r; r = dtd; return r; }
+	static DOSTIMEDATE opCall(d_time dtd) { DOSTIMEDATE r; r = dtd; return r; }
 }
 
 version (no_lzma) { } else {
