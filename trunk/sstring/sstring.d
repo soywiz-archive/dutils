@@ -1,5 +1,41 @@
 import std.string;
 
+char[] stripslashes(char[] str) {
+	char[] r;
+	for (int n = 0; n < str.length; n++) {
+		char c = str[n];
+		if (c == '\\') {
+			c = str[++n];
+			switch (c) {
+				case 'n': r ~= '\n'; break;
+				case 'r': r ~= '\r'; break;
+				case 't': r ~= '\t'; break;
+				default:
+					r ~= '\\';
+					r ~= c;
+				break;
+			}
+		} else {
+			r ~= c;
+		}
+	}
+	return r;
+}
+
+char[] addslashes(char[] str) {
+	char[] r;
+	for (int n = 0; n < str.length; n++) {
+		char c = str[n];
+		switch (c) {
+			case '\n': r ~= "\\n"; break;
+			case '\r': r ~= "\\r"; break;
+			case '\t': r ~= "\\t"; break;
+			default: r ~= c; break;
+		}
+	}
+	return r;
+}
+
 int hex2dec(char[] s) {
 	int r;
 	foreach (c; s) {
