@@ -97,6 +97,7 @@ version (UNIT_TEST) {
 extern(Windows) {
 	int MultiByteToWideChar(uint CodePage, uint dwFlags, char* lpMultiByteStr, int cbMultiByte, wchar* lpWideCharStr, int cchWideChar);
 	int WideCharToMultiByte(uint CodePage, uint dwFlags, wchar* lpWideCharStr, int cchWideChar, char* lpMultiByteStr, int cbMultiByte, char* lpDefaultChar, int* lpUsedDefaultChar);
+	uint GetACP();
 }
 
 wchar[] sjis_convert_utf16(char[] data) { return convert_to_utf16(data, 932); }
